@@ -116,7 +116,12 @@ describe('memory-transport round-trip', () => {
     expect(parseGuestToHost(hostInbox[0])).toEqual(sent)
 
     // host -> client
-    const reply: HostToGuest = { t: 'opp_progress', filled: 4, total: 16 }
+    const reply: HostToGuest = {
+      t: 'standings',
+      players: [
+        { id: 'host', seat: 1, filled: 4, total: 16, timeMs: null, finished: false, wins: 0 },
+      ],
+    }
     host.broadcast(reply)
     await new Promise((r) => setTimeout(r, 0))
     expect(guestInbox).toEqual([reply])

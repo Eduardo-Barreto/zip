@@ -1,67 +1,99 @@
 import { useEffect, useReducer, useRef } from 'react'
 
+import type { LobbyPlayer, Standing } from '../transport/messages'
 import type { TransportFactory } from '../transport/transport'
 import {
   createGuestMatch,
   createHostMatch,
   type GuestMatch,
+  HOST_ID,
   type HostMatch,
-  type MatchResult,
+  type MatchResultData,
   type MatchSetup,
 } from './matchController'
 
 // Thin React wrapper over the transport-free match controllers. The
-// host-authoritative logic (tiebreak AC22b, disconnect policy AC22c) and the
-// progress throttle (AC21) all live in matchController.ts / throttle.ts and are
-// unit-tested there directly with memoryTransport and injected clocks. This
-// hook only owns the React lifecycle: it spins up the right controller for the
-// role, mirrors its events into render state, and tears it down on unmount.
+// host-authoritative logic (lobby, ranking, race-end, all-vote rematch) and the
+// progress throttle all live in matchController.ts / throttle.ts and are
+// unit-tested there directly with memoryTransport and injected clocks. This hook
+// only owns the React lifecycle: it spins up the right controller for the role,
+// mirrors its events into render state, and tears it down on unmount.
 
-export type { MatchResult, MatchSetup } from './matchController'
+export type { MatchResultData, MatchSetup } from './matchController'
+export { HOST_ID } from './matchController'
 export { PROGRESS_THROTTLE_MS } from './throttle'
 
-export type MatchPhase = 'connecting' | 'waiting' | 'racing' | 'done'
+export type MatchPhase = 'connecting' | 'lobby' | 'racing' | 'results'
 
 export type MatchState = {
   phase: MatchPhase
   role: 'host' | 'guest'
+  myId: string | null
+  players: LobbyPlayer[]
   setup: MatchSetup | null
-  oppFilled: number
-  oppTotal: number
-  result: MatchResult | null
+  standings: Standing[]
+  result: MatchResultData | null
+  rematchReadyCount: number
+  rematchTotal: number
+  localRematchVoted: boolean
   error: string | null
 }
 
 type MatchAction =
   | { kind: 'connected' }
+  | { kind: 'welcome'; you: string }
+  | { kind: 'lobby'; players: LobbyPlayer[] }
   | { kind: 'setup'; setup: MatchSetup }
-  | { kind: 'rematch_setup'; setup: MatchSetup }
-  | { kind: 'opp_progress'; filled: number; total: number }
-  | { kind: 'result'; result: MatchResult }
+  | { kind: 'standings'; players: Standing[] }
+  | { kind: 'result'; result: MatchResultData }
+  | { kind: 'rematch_waiting'; readyCount: number; total: number }
+  | { kind: 'local_rematch_vote' }
   | { kind: 'error'; message: string }
 
 function reducer(state: MatchState, action: MatchAction): MatchState {
   switch (action.kind) {
     case 'connected':
-      return state.phase === 'connecting' ? { ...state, phase: 'waiting' } : state
+      return state.phase === 'connecting' ? { ...state, phase: 'lobby' } : state
+    case 'welcome':
+      return { ...state, myId: action.you }
+    case 'lobby':
+      // A lobby update only moves us into the lobby from the connecting screen;
+      // it never pulls us back out of racing/results.
+      return {
+        ...state,
+        players: action.players,
+        phase: state.phase === 'connecting' ? 'lobby' : state.phase,
+      }
     case 'setup':
-      return { ...state, phase: 'racing', setup: action.setup }
-    case 'rematch_setup':
-      // Reset race state but stay in racing phase with the new setup.
       return {
         ...state,
         phase: 'racing',
         setup: action.setup,
-        oppFilled: 0,
-        oppTotal: 0,
+        standings: [],
         result: null,
+        rematchReadyCount: 0,
+        rematchTotal: 0,
+        localRematchVoted: false,
       }
-    case 'opp_progress':
-      if (state.phase === 'done') return state
-      return { ...state, oppFilled: action.filled, oppTotal: action.total }
+    case 'standings':
+      if (state.phase !== 'racing') return state
+      return { ...state, standings: action.players }
     case 'result':
-      if (state.phase === 'done') return state
-      return { ...state, phase: 'done', result: action.result }
+      if (state.phase === 'results') return state
+      return {
+        ...state,
+        phase: 'results',
+        result: action.result,
+        standings: action.result.standings,
+        localRematchVoted: false,
+      }
+    case 'rematch_waiting':
+      return { ...state, rematchReadyCount: action.readyCount, rematchTotal: action.total }
+    case 'local_rematch_vote':
+      // Only meaningful on the results screen. If the host casts the LAST vote,
+      // beginRace dispatches `setup` (phase → racing) before this action lands;
+      // guarding on phase keeps a stale vote flag from bleeding into next round.
+      return state.phase === 'results' ? { ...state, localRematchVoted: true } : state
     case 'error':
       return { ...state, error: action.message }
   }
@@ -88,31 +120,34 @@ export type UseMatchOptions = HostOptions | GuestOptions
 
 export type UseMatch = {
   state: MatchState
+  /** Host only: begin the first race (no-op for guests / when not startable). */
+  start: () => void
+  /** Guest only: toggle lobby readiness (no-op for the host). */
+  setReady: (ready: boolean) => void
   reportProgress: (filled: number, total: number) => void
   reportSolved: (timeMs: number) => void
-  /** Host: broadcast a new rematch_setup with the given seed (same difficulty).
-   *  Guest: send a `rematch` request to the host. */
-  triggerRematch: (newSeed?: number) => void
+  /** Opt into a rematch; the race restarts once everyone has opted in. */
+  voteRematch: () => void
 }
 
-function initialState(role: 'host' | 'guest', setup: MatchSetup | null): MatchState {
+function initialState(role: 'host' | 'guest'): MatchState {
   return {
     phase: 'connecting',
     role,
-    setup,
-    oppFilled: 0,
-    oppTotal: 0,
+    myId: role === 'host' ? HOST_ID : null,
+    players: [],
+    setup: null,
+    standings: [],
     result: null,
+    rematchReadyCount: 0,
+    rematchTotal: 0,
+    localRematchVoted: false,
     error: null,
   }
 }
 
 export function useMatch(options: UseMatchOptions): UseMatch {
-  const initialSetup: MatchSetup | null =
-    options.role === 'host' ? { seed: options.seed, difficulty: options.difficulty } : null
-  const [state, dispatch] = useReducer(reducer, undefined, () =>
-    initialState(options.role, initialSetup),
-  )
+  const [state, dispatch] = useReducer(reducer, options.role, initialState)
 
   const controllerRef = useRef<HostMatch | GuestMatch | null>(null)
   const pendingRef = useRef<Promise<HostMatch | GuestMatch> | null>(null)
@@ -123,9 +158,6 @@ export function useMatch(options: UseMatchOptions): UseMatch {
   const aliveRef = useRef(true)
 
   // Keep the latest options reachable without re-running the connect effect.
-  // The connection identity (role/roomCode/transport) IS in the dep list so a
-  // change reconnects; per-role payload (seed/difficulty/guestLocalId/now) is
-  // read off this ref at connect time so it doesn't thrash the socket.
   const optionsRef = useRef(options)
   optionsRef.current = options
 
@@ -134,11 +166,10 @@ export function useMatch(options: UseMatchOptions): UseMatch {
   useEffect(() => {
     // React StrictMode (dev) mounts effects mount → cleanup → mount synchronously.
     // A real-time connection must NOT actually drop on that throwaway cleanup, or
-    // the host would read the guest's transient close as an "opponent left" and
-    // end the match before it begins. So the cleanup DEFERS the close by a
-    // macrotask; if the effect re-runs immediately (the StrictMode remount) we
-    // cancel the pending close and keep the live controller. Genuine unmounts
-    // have no immediate remount, so the deferred close still fires.
+    // the host would read a guest's transient close as a disconnect before the
+    // match begins. So the cleanup DEFERS the close by a macrotask; if the effect
+    // re-runs immediately (the StrictMode remount) we cancel the pending close
+    // and keep the live controller. Genuine unmounts still tear down.
     aliveRef.current = true
     if (closeTimerRef.current !== null) {
       clearTimeout(closeTimerRef.current)
@@ -148,14 +179,24 @@ export function useMatch(options: UseMatchOptions): UseMatch {
 
     const opts = optionsRef.current
     const alive = () => aliveRef.current
-    const events = {
-      onConnected: () => alive() && dispatch({ kind: 'connected' }),
-      onGuestConnect: () => alive() && dispatch({ kind: 'connected' }),
+    const hostEvents = {
+      onLobby: (players: LobbyPlayer[]) => alive() && dispatch({ kind: 'lobby', players }),
       onSetup: (setup: MatchSetup) => alive() && dispatch({ kind: 'setup', setup }),
-      onRematchSetup: (setup: MatchSetup) => alive() && dispatch({ kind: 'rematch_setup', setup }),
-      onOppProgress: (filled: number, total: number) =>
-        alive() && dispatch({ kind: 'opp_progress', filled, total }),
-      onResult: (result: MatchResult) => alive() && dispatch({ kind: 'result', result }),
+      onStandings: (players: Standing[]) => alive() && dispatch({ kind: 'standings', players }),
+      onResult: (result: MatchResultData) => alive() && dispatch({ kind: 'result', result }),
+      onRematchWaiting: (readyCount: number, total: number) =>
+        alive() && dispatch({ kind: 'rematch_waiting', readyCount, total }),
+      onError: (message: string) => alive() && dispatch({ kind: 'error', message }),
+    }
+    const guestEvents = {
+      onConnected: () => alive() && dispatch({ kind: 'connected' }),
+      onWelcome: (you: string) => alive() && dispatch({ kind: 'welcome', you }),
+      onLobby: (players: LobbyPlayer[]) => alive() && dispatch({ kind: 'lobby', players }),
+      onSetup: (setup: MatchSetup) => alive() && dispatch({ kind: 'setup', setup }),
+      onStandings: (players: Standing[]) => alive() && dispatch({ kind: 'standings', players }),
+      onResult: (result: MatchResultData) => alive() && dispatch({ kind: 'result', result }),
+      onRematchWaiting: (readyCount: number, total: number) =>
+        alive() && dispatch({ kind: 'rematch_waiting', readyCount, total }),
       onError: (message: string) => alive() && dispatch({ kind: 'error', message }),
     }
 
@@ -165,13 +206,13 @@ export function useMatch(options: UseMatchOptions): UseMatch {
             transport,
             roomCode,
             { seed: opts.seed, difficulty: opts.difficulty },
-            events,
+            hostEvents,
             opts.now ?? (() => performance.now()),
           )
         : createGuestMatch(
             transport,
             roomCode,
-            events,
+            guestEvents,
             opts.role === 'guest' ? opts.guestLocalId : undefined,
             opts.now ?? (() => performance.now()),
           )
@@ -186,7 +227,6 @@ export function useMatch(options: UseMatchOptions): UseMatch {
       })
 
     return () => {
-      // Defer the teardown so a StrictMode remount can reclaim the connection.
       closeTimerRef.current = setTimeout(() => {
         closeTimerRef.current = null
         aliveRef.current = false
@@ -200,19 +240,21 @@ export function useMatch(options: UseMatchOptions): UseMatch {
 
   return {
     state,
+    start: () => {
+      const ctrl = controllerRef.current
+      if (ctrl && 'start' in ctrl) ctrl.start()
+    },
+    setReady: (ready) => {
+      const ctrl = controllerRef.current
+      if (ctrl && 'setReady' in ctrl) ctrl.setReady(ready)
+    },
     reportProgress: (filled, total) => controllerRef.current?.reportProgress(filled, total),
     reportSolved: (timeMs) => controllerRef.current?.reportSolved(timeMs),
-    triggerRematch: (newSeed) => {
+    voteRematch: () => {
       const ctrl = controllerRef.current
       if (!ctrl) return
-      if ('startRematch' in ctrl) {
-        // host controller
-        const seed = newSeed ?? Math.floor(Math.random() * 0x7fffffff)
-        ctrl.startRematch(seed)
-      } else {
-        // guest controller
-        ctrl.requestRematch()
-      }
+      ctrl.voteRematch()
+      dispatch({ kind: 'local_rematch_vote' })
     },
   }
 }

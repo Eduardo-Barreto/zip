@@ -1,18 +1,18 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { JoinLinkBox } from '../../components/JoinLinkBox'
+import { PlayerList } from '../../components/PlayerList'
 import { generatePuzzleWith } from '../../game/generate'
-import { type MatchSetup, randomMatchSeed } from '../../hooks/matchController'
+import { randomMatchSeed } from '../../hooks/matchController'
 import { useMatch } from '../../hooks/useMatch'
 import { getTransport } from '../../transport'
 import { generateRoomCode } from '../../transport/peer-ids'
 import { RaceView } from './Race'
 import { ResultView } from './Result'
 
-// Host page: pick a difficulty, then create a room and share it. The peer
-// connection is established only after difficulty is confirmed, so the
-// match_setup message always carries the chosen difficulty. Rematch keeps the
-// same peer room and generates a new random seed without closing the connection.
+// Host page: pick a difficulty, then open a room and share it. Guests join into
+// a lobby and mark themselves Pronto; the host starts everyone at once. The peer
+// room stays open across rematches. The host is seat 1 and counts as a player.
 
 // ---------------------------------------------------------------------------
 // Difficulty tiers
@@ -60,7 +60,7 @@ function DifficultyPicker({ onConfirm }: DifficultyPickerProps) {
       <div className="text-center">
         <h1 className="section-heading text-4xl text-[var(--color-accent)]">Criar sala</h1>
         <p className="mt-3 text-[15px] text-[var(--color-text-muted)]">
-          Escolha a dificuldade e compartilhe o link com seu oponente.
+          Escolha a dificuldade e compartilhe o link. Vários jogadores podem entrar.
         </p>
       </div>
 
@@ -133,7 +133,7 @@ type HostSessionProps = {
 
 function HostSession({ roomCode, transport, difficulty, seed }: HostSessionProps) {
   const navigate = useNavigate()
-  const { state, reportProgress, reportSolved, triggerRematch } = useMatch({
+  const { state, start, reportProgress, reportSolved, voteRematch } = useMatch({
     role: 'host',
     roomCode,
     transport,
@@ -141,24 +141,27 @@ function HostSession({ roomCode, transport, difficulty, seed }: HostSessionProps
     difficulty: difficulty.value,
   })
 
-  const setup: MatchSetup | null = state.setup
+  const setup = state.setup
   const puzzle = useMemo(
     () => (setup !== null ? generatePuzzleWith(setup.seed, setup.difficulty) : null),
     [setup],
   )
 
-  const handleRematch = useCallback(() => {
-    triggerRematch()
-  }, [triggerRematch])
+  const handleLeave = useCallback(() => navigate('/'), [navigate])
 
   // --- result screen ---
-  if (state.result !== null) {
+  if (state.phase === 'results' && state.result !== null) {
     return (
       <ResultView
-        result={state.result}
-        side="host"
-        onRematch={handleRematch}
-        onLeave={() => navigate('/')}
+        standings={state.standings}
+        myId={state.myId}
+        winnerId={state.result.winnerId}
+        reason={state.result.reason}
+        localRematchVoted={state.localRematchVoted}
+        rematchReadyCount={state.rematchReadyCount}
+        rematchTotal={state.rematchTotal}
+        onVoteRematch={voteRematch}
+        onLeave={handleLeave}
       />
     )
   }
@@ -168,9 +171,8 @@ function HostSession({ roomCode, transport, difficulty, seed }: HostSessionProps
     return (
       <RaceView
         puzzle={puzzle}
-        side="host"
-        oppFilled={state.oppFilled}
-        oppTotal={state.oppTotal}
+        standings={state.standings}
+        myId={state.myId}
         reportProgress={reportProgress}
         reportSolved={reportSolved}
       />
@@ -178,15 +180,20 @@ function HostSession({ roomCode, transport, difficulty, seed }: HostSessionProps
   }
 
   // --- lobby / waiting screen ---
+  const guestCount = state.players.length - 1
+  const canStart = state.players.length >= 2 && state.players.every((p) => p.ready)
+
   return (
-    <main className="fade-in mx-auto flex min-h-[100dvh] max-w-md flex-col justify-center gap-8 px-6 py-10">
+    <main className="fade-in mx-auto flex min-h-[100dvh] max-w-md flex-col justify-center gap-6 px-6 py-10">
       <div className="decorative-grid decorative-grid--masked" aria-hidden="true" />
       <div className="glow" aria-hidden="true" />
 
       <div className="text-center">
         <h1 className="section-heading text-4xl text-[var(--color-accent)]">Sala criada</h1>
         <p className="mt-3 text-[15px] text-[var(--color-text-muted)]">
-          Aguardando o oponente entrar…
+          {guestCount === 0
+            ? 'Aguardando jogadores entrarem…'
+            : 'Quando todos estiverem prontos, inicie a partida.'}
         </p>
       </div>
 
@@ -202,6 +209,8 @@ function HostSession({ roomCode, transport, difficulty, seed }: HostSessionProps
         </span>
       </div>
 
+      <PlayerList players={state.players} myId={state.myId} />
+
       <JoinLinkBox roomCode={roomCode} />
 
       {state.error !== null ? (
@@ -210,13 +219,28 @@ function HostSession({ roomCode, transport, difficulty, seed }: HostSessionProps
         </p>
       ) : null}
 
-      <button
-        type="button"
-        onClick={() => navigate('/')}
-        className="spotlight-card card-lift rounded-xl px-6 py-3 text-center text-[15px] text-[var(--color-text)]"
-      >
-        Cancelar
-      </button>
+      <div className="flex flex-col gap-3">
+        <button
+          type="button"
+          onClick={start}
+          disabled={!canStart}
+          data-testid="start-match"
+          className="card-lift rounded-xl px-6 py-4 text-center font-[var(--font-mono)] text-[16px] font-bold tracking-tight text-[#0a0a0a] active:scale-95 disabled:opacity-40"
+          style={{
+            backgroundColor: 'var(--color-accent)',
+            boxShadow: '0 12px 36px -12px color-mix(in srgb, var(--color-accent) 70%, transparent)',
+          }}
+        >
+          {canStart ? 'Iniciar partida' : 'Aguardando jogadores…'}
+        </button>
+        <button
+          type="button"
+          onClick={handleLeave}
+          className="spotlight-card card-lift rounded-xl px-6 py-3 text-center text-[15px] text-[var(--color-text)]"
+        >
+          Cancelar
+        </button>
+      </div>
     </main>
   )
 }

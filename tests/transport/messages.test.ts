@@ -6,8 +6,8 @@ import { validateGuestToHost, validateHostToGuest } from '../../src/transport/va
 // Every valid wire variant. Round-tripped through both validation layers.
 const VALID_GUEST_TO_HOST: GuestToHost[] = [
   { t: 'hello' },
-  { t: 'hello', name: 'Ana' },
-  { t: 'ready' },
+  { t: 'ready', ready: true },
+  { t: 'ready', ready: false },
   { t: 'progress', filled: 0, total: 16 },
   { t: 'progress', filled: 16, total: 16 },
   { t: 'solved', timeMs: 0 },
@@ -16,20 +16,34 @@ const VALID_GUEST_TO_HOST: GuestToHost[] = [
 ]
 
 const VALID_HOST_TO_GUEST: HostToGuest[] = [
-  { t: 'welcome' },
+  { t: 'welcome', you: 'zip-guest-abc123' },
+  { t: 'lobby', players: [] },
+  {
+    t: 'lobby',
+    players: [
+      { id: 'host', seat: 1, ready: true },
+      { id: 'g1', seat: 2, ready: false },
+    ],
+  },
   { t: 'match_setup', seed: 123456, difficulty: 1 },
   { t: 'match_setup', seed: 0, difficulty: 60 },
-  { t: 'opp_progress', filled: 3, total: 25 },
-  { t: 'result', outcome: 'host', reason: 'solved', times: { host: 100, guest: 200 } },
-  { t: 'result', outcome: 'guest', reason: 'solved', times: { host: 300, guest: 200 } },
-  { t: 'result', outcome: 'draw', reason: 'solved', times: { host: 200, guest: 200 } },
+  {
+    t: 'standings',
+    players: [
+      { id: 'host', seat: 1, filled: 3, total: 25, timeMs: null, finished: false, wins: 0 },
+    ],
+  },
   {
     t: 'result',
-    outcome: 'abandoned',
-    reason: 'opponent_left',
-    times: { host: null, guest: null },
+    standings: [
+      { id: 'host', seat: 1, filled: 25, total: 25, timeMs: 100, finished: true, wins: 2 },
+      { id: 'g1', seat: 2, filled: 12, total: 25, timeMs: null, finished: false, wins: 1 },
+    ],
+    winnerId: 'host',
+    reason: 'solved',
   },
-  { t: 'rematch_setup', seed: 999, difficulty: 12 },
+  { t: 'result', standings: [], winnerId: null, reason: 'host_left' },
+  { t: 'rematch_waiting', readyCount: 1, total: 3 },
 ]
 
 describe('AC18: round-trip parse + validate for every valid variant', () => {
@@ -62,7 +76,8 @@ describe('AC19: hostile payloads rejected (return null)', () => {
     ['t is not a string', { t: 42 }],
     ['null', null],
     ['array where object expected', ['progress', 1, 2]],
-    ['hello: name wrong type', { t: 'hello', name: 123 }],
+    ['ready: missing flag', { t: 'ready' }],
+    ['ready: flag wrong type', { t: 'ready', ready: 'yes' }],
     ['progress: filled string', { t: 'progress', filled: '1', total: 16 }],
     ['progress: total NaN', { t: 'progress', filled: 1, total: Number.NaN }],
     ['progress: filled negative', { t: 'progress', filled: -1, total: 16 }],
@@ -94,34 +109,47 @@ describe('AC19: hostile payloads rejected (return null)', () => {
     ['match_setup: difficulty zero (< 1)', { t: 'match_setup', seed: 1, difficulty: 0 }],
     ['match_setup: difficulty negative', { t: 'match_setup', seed: 1, difficulty: -5 }],
     ['match_setup: seed NaN', { t: 'match_setup', seed: Number.NaN, difficulty: 1 }],
-    // rematch_setup hostile payloads
-    ['rematch_setup: missing seed', { t: 'rematch_setup', difficulty: 12 }],
-    ['rematch_setup: difficulty zero', { t: 'rematch_setup', seed: 1, difficulty: 0 }],
-    // opp_progress
-    ['opp_progress: filled string', { t: 'opp_progress', filled: 'x', total: 1 }],
-    ['opp_progress: total negative', { t: 'opp_progress', filled: 1, total: -3 }],
+    // welcome
+    ['welcome: missing you', { t: 'welcome' }],
+    ['welcome: you wrong type', { t: 'welcome', you: 42 }],
+    // lobby
+    ['lobby: players not array', { t: 'lobby', players: {} }],
+    ['lobby: player missing ready', { t: 'lobby', players: [{ id: 'h', seat: 1 }] }],
+    ['lobby: player seat zero', { t: 'lobby', players: [{ id: 'h', seat: 0, ready: true }] }],
+    // standings
+    [
+      'standings: filled string',
+      {
+        t: 'standings',
+        players: [{ id: 'h', seat: 1, filled: 'x', total: 1, timeMs: null, finished: false }],
+      },
+    ],
+    [
+      'standings: finished wrong type',
+      {
+        t: 'standings',
+        players: [{ id: 'h', seat: 1, filled: 1, total: 1, timeMs: null, finished: 'no' }],
+      },
+    ],
     // result
-    ['result: nested times missing', { t: 'result', outcome: 'host', reason: 'solved' }],
     [
-      'result: times is array not object',
-      { t: 'result', outcome: 'host', reason: 'solved', times: [1, 2] },
+      'result: standings not array',
+      { t: 'result', standings: {}, winnerId: null, reason: 'solved' },
     ],
+    ['result: bad reason', { t: 'result', standings: [], winnerId: null, reason: 'kicked' }],
+    ['result: winnerId wrong type', { t: 'result', standings: [], winnerId: 5, reason: 'solved' }],
     [
-      'result: bad outcome',
-      { t: 'result', outcome: 'tie', reason: 'solved', times: { host: 1, guest: 2 } },
+      'result: bad standing timeMs',
+      {
+        t: 'result',
+        standings: [{ id: 'h', seat: 1, filled: 1, total: 1, timeMs: 'x', finished: true }],
+        winnerId: 'h',
+        reason: 'solved',
+      },
     ],
-    [
-      'result: bad reason',
-      { t: 'result', outcome: 'host', reason: 'kicked', times: { host: 1, guest: 2 } },
-    ],
-    [
-      'result: host time NaN',
-      { t: 'result', outcome: 'host', reason: 'solved', times: { host: Number.NaN, guest: 2 } },
-    ],
-    [
-      'result: guest time string',
-      { t: 'result', outcome: 'host', reason: 'solved', times: { host: 1, guest: '2' } },
-    ],
+    // rematch_waiting
+    ['rematch_waiting: missing total', { t: 'rematch_waiting', readyCount: 1 }],
+    ['rematch_waiting: negative count', { t: 'rematch_waiting', readyCount: -1, total: 2 }],
     [
       '__proto__ polluted',
       JSON.parse('{"t":"match_setup","seed":1,"difficulty":1,"__proto__":{"x":1}}'),

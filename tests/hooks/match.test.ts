@@ -3,13 +3,14 @@ import {
   createGuestMatch,
   createHostMatch,
   type GuestEvents,
+  HOST_ID,
   type HostEvents,
-  type MatchResult,
+  type MatchResultData,
   type MatchSetup,
-  resolveOutcome,
+  rankStandings,
 } from '../../src/hooks/matchController'
 import { memoryTransport, resetMemoryTransport } from '../../src/transport/memory-transport'
-import type { GuestToHost, HostToGuest } from '../../src/transport/messages'
+import type { GuestToHost, HostToGuest, LobbyPlayer, Standing } from '../../src/transport/messages'
 import type {
   ClientHandlers,
   HostHandlers,
@@ -18,20 +19,16 @@ import type {
   TransportFactory,
 } from '../../src/transport/transport'
 
-// AC22b (tiebreak) and AC22c (disconnect terminal state) for the 1v1 race.
-// These run against memoryTransport — whose close() fires onClientDisconnect on
-// the host AND onDisconnected on the client, bidirectionally — so the disconnect
-// policy is fully observable without real timers or broadcast quirks.
+// N-player race over memoryTransport: lobby + ready-up, host-authoritative
+// start, first-solver-wins, full standings, and the all-must-opt-in rematch
+// (the v1 single-click-restart bug is locked out by a regression test). The
+// host-leaving path uses a notifying transport that mirrors the real
+// peerjs/broadcast tab-close semantics, since memoryTransport's host.close() is
+// silent to clients by design.
 
 const ROOM = 'WXYZ'
 const SETUP: MatchSetup = { seed: 42, difficulty: 12 }
 
-// A minimal in-test transport that mirrors the REAL peerjs/broadcast tab-close
-// semantics for the host-leaving direction: host.close() notifies every
-// connected client's onDisconnected. memoryTransport intentionally does NOT do
-// this (its host.close() is silent to clients — see §3.5), and it is shipped
-// code we must not edit, so this stub models the surviving-guest path the e2e
-// covers with a real tab close.
 function notifyingTransport(): TransportFactory {
   type Conn = { client: ClientHandlers; host: HostHandlers; id: string; closed: boolean }
   const rooms = new Map<string, { host: HostHandlers; conns: Map<string, Conn> }>()
@@ -96,34 +93,42 @@ function notifyingTransport(): TransportFactory {
 const tick = () => new Promise((r) => setTimeout(r, 0))
 const settle = () => new Promise((r) => setTimeout(r, 20))
 
-function hostEvents(into: {
-  results: MatchResult[]
+type HostInto = {
+  lobbies: LobbyPlayer[][]
   setups: MatchSetup[]
-  rematches: MatchSetup[]
-  opp: number[]
-}): HostEvents {
+  standings: Standing[][]
+  results: MatchResultData[]
+  waits: Array<{ readyCount: number; total: number }>
+}
+type GuestInto = HostInto & { welcome: string[] }
+
+function newHostInto(): HostInto {
+  return { lobbies: [], setups: [], standings: [], results: [], waits: [] }
+}
+function newGuestInto(): GuestInto {
+  return { lobbies: [], setups: [], standings: [], results: [], waits: [], welcome: [] }
+}
+
+function hostEvents(into: HostInto): HostEvents {
   return {
-    onGuestConnect: () => {},
+    onLobby: (players) => into.lobbies.push(players),
     onSetup: (s) => into.setups.push(s),
-    onOppProgress: (filled) => into.opp.push(filled),
+    onStandings: (s) => into.standings.push(s),
     onResult: (r) => into.results.push(r),
-    onRematchSetup: (s) => into.rematches.push(s),
+    onRematchWaiting: (readyCount, total) => into.waits.push({ readyCount, total }),
     onError: () => {},
   }
 }
 
-function guestEvents(into: {
-  results: MatchResult[]
-  setups: MatchSetup[]
-  rematches: MatchSetup[]
-  opp: number[]
-}): GuestEvents {
+function guestEvents(into: GuestInto): GuestEvents {
   return {
     onConnected: () => {},
+    onWelcome: (you) => into.welcome.push(you),
+    onLobby: (players) => into.lobbies.push(players),
     onSetup: (s) => into.setups.push(s),
-    onOppProgress: (filled) => into.opp.push(filled),
+    onStandings: (s) => into.standings.push(s),
     onResult: (r) => into.results.push(r),
-    onRematchSetup: (s) => into.rematches.push(s),
+    onRematchWaiting: (readyCount, total) => into.waits.push({ readyCount, total }),
     onError: () => {},
   }
 }
@@ -132,374 +137,435 @@ afterEach(() => {
   resetMemoryTransport()
 })
 
-describe('resolveOutcome (pure tiebreak rule)', () => {
-  it('lower timeMs wins', () => {
-    expect(resolveOutcome(1000, 2000).outcome).toBe('host')
-    expect(resolveOutcome(2000, 1000).outcome).toBe('guest')
-  })
-
-  it('AC22b: exact tie resolves host-wins (deterministic), never draw', () => {
-    const r = resolveOutcome(1500, 1500)
-    expect(r.outcome).toBe('host')
-    expect(r.reason).toBe('solved')
-    expect(r.times).toEqual({ host: 1500, guest: 1500 })
+describe('rankStandings (pure ranking rule)', () => {
+  it('finishers first by ascending time (exact tie -> lower seat), then unfinished by filled desc', () => {
+    const ranked = rankStandings([
+      {
+        id: 'c',
+        seat: 3,
+        ready: true,
+        filled: 5,
+        total: 16,
+        timeMs: null,
+        finished: false,
+        rematchReady: false,
+        wins: 0,
+      },
+      {
+        id: 'a',
+        seat: 1,
+        ready: true,
+        filled: 16,
+        total: 16,
+        timeMs: 1500,
+        finished: true,
+        rematchReady: false,
+        wins: 0,
+      },
+      {
+        id: 'b',
+        seat: 2,
+        ready: true,
+        filled: 16,
+        total: 16,
+        timeMs: 1500,
+        finished: true,
+        rematchReady: false,
+        wins: 0,
+      },
+      {
+        id: 'd',
+        seat: 4,
+        ready: true,
+        filled: 9,
+        total: 16,
+        timeMs: null,
+        finished: false,
+        rematchReady: false,
+        wins: 0,
+      },
+    ])
+    // a and b both finished at 1500 -> a wins by lower seat. Then unfinished by filled: d(9) before c(5).
+    expect(ranked.map((s) => s.id)).toEqual(['a', 'b', 'd', 'c'])
   })
 })
 
-describe('AC22b: identical solved times across the wire -> host wins', () => {
-  it('host and guest both solve at the same timeMs => result.outcome === host on both sides', async () => {
-    const hostInto = {
-      results: [] as MatchResult[],
-      setups: [] as MatchSetup[],
-      rematches: [] as MatchSetup[],
-      opp: [] as number[],
-    }
-    const guestInto = {
-      results: [] as MatchResult[],
-      setups: [] as MatchSetup[],
-      rematches: [] as MatchSetup[],
-      opp: [] as number[],
-    }
-
+describe('lobby + ready-up', () => {
+  it('a guest connects -> seat assigned, both sides see the roster; ready toggles broadcast', async () => {
+    const hostInto = newHostInto()
+    const guestInto = newGuestInto()
     const host = await createHostMatch(memoryTransport, ROOM, SETUP, hostEvents(hostInto))
     const guest = await createGuestMatch(memoryTransport, ROOM, guestEvents(guestInto), 'g1')
-
     await settle()
 
-    // Guest received match_setup with the correct seed+difficulty.
-    expect(guestInto.setups).toHaveLength(1)
-    expect(guestInto.setups[0]).toEqual(SETUP)
+    // Guest learned its own id and saw the 2-seat roster.
+    expect(guestInto.welcome).toEqual(['zip-guest-g1'])
+    const hostRoster = hostInto.lobbies.at(-1)
+    expect(hostRoster).toBeDefined()
+    expect(hostRoster?.map((p) => ({ seat: p.seat, ready: p.ready }))).toEqual([
+      { seat: 1, ready: true }, // host always ready
+      { seat: 2, ready: false }, // guest not ready yet
+    ])
 
-    // Both finish in the same task batch with identical times. The host's
-    // one-microtask resolution defer lets both `solved` register before the
-    // decision, so the host-wins tiebreak applies (rather than whoever's
-    // message happened to land first).
-    const SAME = 1234
-    guest.reportSolved(SAME)
-    host.reportSolved(SAME)
+    // Guest marks ready -> host roster reflects it.
+    guest.setReady(true)
     await tick()
+    expect(hostInto.lobbies.at(-1)?.every((p) => p.ready)).toBe(true)
 
-    // Host authority resolved the tie; both sides see host as the winner.
-    expect(hostInto.results.at(-1)?.outcome).toBe('host')
-    expect(guestInto.results.at(-1)?.outcome).toBe('host')
-    expect(hostInto.results.at(-1)?.times).toEqual({ host: SAME, guest: SAME })
+    guest.close()
+    host.close()
+  })
+
+  it('AC3: host start is a no-op until a guest is connected AND ready', async () => {
+    const hostInto = newHostInto()
+    const guestInto = newGuestInto()
+    const host = await createHostMatch(memoryTransport, ROOM, SETUP, hostEvents(hostInto))
+    const guest = await createGuestMatch(memoryTransport, ROOM, guestEvents(guestInto), 'g1')
+    await settle()
+
+    // Guest present but NOT ready -> start does nothing.
+    host.start()
+    await tick()
+    expect(hostInto.setups).toHaveLength(0)
+
+    // Guest ready -> start launches the race for everyone.
+    guest.setReady(true)
+    await tick()
+    host.start()
+    await tick()
+    expect(hostInto.setups).toEqual([SETUP])
+    expect(guestInto.setups).toEqual([SETUP])
 
     guest.close()
     host.close()
   })
 })
 
-describe('AC22: a normal race -> first solver wins, loser receives result', () => {
-  it('guest solves faster than host => guest wins, both notified', async () => {
-    const hostInto = {
-      results: [] as MatchResult[],
-      setups: [] as MatchSetup[],
-      rematches: [] as MatchSetup[],
-      opp: [] as number[],
-    }
-    const guestInto = {
-      results: [] as MatchResult[],
-      setups: [] as MatchSetup[],
-      rematches: [] as MatchSetup[],
-      opp: [] as number[],
-    }
-
-    const host = await createHostMatch(
-      memoryTransport,
-      ROOM,
-      { seed: 7, difficulty: 7 },
-      hostEvents(hostInto),
-    )
-    const guest = await createGuestMatch(memoryTransport, ROOM, guestEvents(guestInto), 'g1')
+describe('N-player race: first solver wins, everyone gets the standings', () => {
+  it('two guests + host; the fastest finisher wins and the result reaches all', async () => {
+    const hostInto = newHostInto()
+    const g1Into = newGuestInto()
+    const g2Into = newGuestInto()
+    const host = await createHostMatch(memoryTransport, ROOM, SETUP, hostEvents(hostInto))
+    const g1 = await createGuestMatch(memoryTransport, ROOM, guestEvents(g1Into), 'g1')
+    const g2 = await createGuestMatch(memoryTransport, ROOM, guestEvents(g2Into), 'g2')
     await settle()
 
-    // Both report in the same batch; the lower timeMs (guest) wins.
-    guest.reportSolved(900)
-    host.reportSolved(1500)
+    g1.setReady(true)
+    g2.setReady(true)
+    await tick()
+    host.start()
     await tick()
 
-    expect(hostInto.results.at(-1)?.outcome).toBe('guest')
-    expect(guestInto.results.at(-1)?.outcome).toBe('guest')
-    expect(hostInto.results.at(-1)?.times).toEqual({ host: 1500, guest: 900 })
-
-    guest.close()
-    host.close()
-  })
-
-  it('only the host solves => host wins outright, guest time null (lone-solver race end)', async () => {
-    const hostInto = {
-      results: [] as MatchResult[],
-      setups: [] as MatchSetup[],
-      rematches: [] as MatchSetup[],
-      opp: [] as number[],
-    }
-    const guestInto = {
-      results: [] as MatchResult[],
-      setups: [] as MatchSetup[],
-      rematches: [] as MatchSetup[],
-      opp: [] as number[],
-    }
-
-    const host = await createHostMatch(
-      memoryTransport,
-      ROOM,
-      { seed: 1, difficulty: 1 },
-      hostEvents(hostInto),
-    )
-    const guest = await createGuestMatch(memoryTransport, ROOM, guestEvents(guestInto), 'g1')
-    await settle()
-
+    // g1 finishes first.
+    g1.reportSolved(800)
     host.reportSolved(1200)
     await tick()
 
-    expect(hostInto.results.at(-1)?.outcome).toBe('host')
-    expect(guestInto.results.at(-1)?.outcome).toBe('host')
-    expect(hostInto.results.at(-1)?.times).toEqual({ host: 1200, guest: null })
+    const result = hostInto.results.at(-1)
+    expect(result).toBeDefined()
+    expect(result?.reason).toBe('solved')
+    expect(result?.winnerId).toBe('zip-guest-g1')
+    // Standings: winner first, then the host (finished later), then g2 (unfinished).
+    expect(result?.standings[0]?.id).toBe('zip-guest-g1')
+    // Every party received the result.
+    expect(g1Into.results.at(-1)?.winnerId).toBe('zip-guest-g1')
+    expect(g2Into.results.at(-1)?.winnerId).toBe('zip-guest-g1')
+
+    g1.close()
+    g2.close()
+    host.close()
+  })
+
+  it('lone finisher wins outright (others never solved)', async () => {
+    const hostInto = newHostInto()
+    const guestInto = newGuestInto()
+    const host = await createHostMatch(memoryTransport, ROOM, SETUP, hostEvents(hostInto))
+    const guest = await createGuestMatch(memoryTransport, ROOM, guestEvents(guestInto), 'g1')
+    await settle()
+    guest.setReady(true)
+    await tick()
+    host.start()
+    await tick()
+
+    host.reportSolved(1000)
+    await tick()
+
+    expect(hostInto.results.at(-1)?.winnerId).toBe(HOST_ID)
+    expect(guestInto.results.at(-1)?.winnerId).toBe(HOST_ID)
 
     guest.close()
     host.close()
   })
 })
 
-describe('AC22c: disconnect -> defined terminal state (memoryTransport)', () => {
-  it('guest leaves mid-race => host reaches result{outcome:host, reason:opponent_left}', async () => {
-    const hostInto = {
-      results: [] as MatchResult[],
-      setups: [] as MatchSetup[],
-      rematches: [] as MatchSetup[],
-      opp: [] as number[],
-    }
-    const guestInto = {
-      results: [] as MatchResult[],
-      setups: [] as MatchSetup[],
-      rematches: [] as MatchSetup[],
-      opp: [] as number[],
-    }
-
+describe('AC8-AC10: rematch requires ALL players to opt in', () => {
+  it('one vote does NOT restart; the last vote restarts with a fresh seed', async () => {
+    const hostInto = newHostInto()
+    const guestInto = newGuestInto()
+    let nextSeed = 5000
     const host = await createHostMatch(
       memoryTransport,
       ROOM,
-      { seed: 3, difficulty: 3 },
+      SETUP,
       hostEvents(hostInto),
+      () => performance.now(),
+      () => ++nextSeed,
     )
     const guest = await createGuestMatch(memoryTransport, ROOM, guestEvents(guestInto), 'g1')
     await settle()
+    guest.setReady(true)
+    await tick()
+    host.start()
+    await tick()
+    host.reportSolved(1000)
+    await tick()
+    expect(hostInto.setups).toHaveLength(1) // only the initial race so far
 
-    // Guest bails mid-race; memoryTransport.close() fires onClientDisconnect on
-    // the host side.
+    // Host votes alone -> NO restart (regression for the v1 single-click bug).
+    host.voteRematch()
+    await tick()
+    expect(hostInto.setups).toHaveLength(1)
+    expect(hostInto.waits.at(-1)).toEqual({ readyCount: 1, total: 2 })
+
+    // Guest votes -> everyone in -> fresh race with a new seed.
+    guest.voteRematch()
+    await tick()
+    expect(hostInto.setups).toHaveLength(2)
+    const second = hostInto.setups.at(-1)
+    expect(second?.difficulty).toBe(12)
+    expect(second?.seed).toBe(5001)
+    expect(second?.seed).not.toBe(SETUP.seed)
+    expect(guestInto.setups.at(-1)?.seed).toBe(5001)
+
     guest.close()
+    host.close()
+  })
+
+  it('a guest leaving during results can complete the rematch vote for the rest', async () => {
+    const hostInto = newHostInto()
+    const g1Into = newGuestInto()
+    const g2Into = newGuestInto()
+    let nextSeed = 7000
+    const host = await createHostMatch(
+      memoryTransport,
+      ROOM,
+      SETUP,
+      hostEvents(hostInto),
+      () => performance.now(),
+      () => ++nextSeed,
+    )
+    const g1 = await createGuestMatch(memoryTransport, ROOM, guestEvents(g1Into), 'g1')
+    const g2 = await createGuestMatch(memoryTransport, ROOM, guestEvents(g2Into), 'g2')
+    await settle()
+    g1.setReady(true)
+    g2.setReady(true)
+    await tick()
+    host.start()
+    await tick()
+    host.reportSolved(1000)
     await tick()
 
-    const terminal = hostInto.results.at(-1)
-    expect(terminal?.outcome).toBe('host')
-    expect(terminal?.reason).toBe('opponent_left')
-    expect(terminal?.times).toEqual({ host: null, guest: null })
+    // Host + g1 vote; g2 has not. No restart yet (3 players, 2 votes).
+    host.voteRematch()
+    g1.voteRematch()
+    await tick()
+    expect(hostInto.setups).toHaveLength(1)
+
+    // g2 leaves -> remaining (host + g1) have both voted -> restart.
+    g2.close()
+    await tick()
+    expect(hostInto.setups).toHaveLength(2)
+
+    g1.close()
+    host.close()
+  })
+})
+
+describe('round-end scoreboard: cumulative wins across rematches', () => {
+  it('the winner of each round accrues wins that persist into the next round', async () => {
+    const hostInto = newHostInto()
+    const guestInto = newGuestInto()
+    let nextSeed = 3000
+    const host = await createHostMatch(
+      memoryTransport,
+      ROOM,
+      SETUP,
+      hostEvents(hostInto),
+      () => performance.now(),
+      () => ++nextSeed,
+    )
+    const guest = await createGuestMatch(memoryTransport, ROOM, guestEvents(guestInto), 'g1')
+    await settle()
+    guest.setReady(true)
+    await tick()
+    host.start()
+    await tick()
+
+    // Round 1: host wins.
+    host.reportSolved(900)
+    await tick()
+    const r1 = hostInto.results.at(-1)
+    expect(r1?.winnerId).toBe(HOST_ID)
+    expect(r1?.standings.find((s) => s.id === HOST_ID)?.wins).toBe(1)
+    expect(r1?.standings.find((s) => s.id === 'zip-guest-g1')?.wins).toBe(0)
+
+    // Rematch (all opt in) then round 2: guest wins.
+    host.voteRematch()
+    guest.voteRematch()
+    await tick()
+    expect(hostInto.setups).toHaveLength(2)
+    guest.reportSolved(700)
+    await tick()
+    const r2 = hostInto.results.at(-1)
+    expect(r2?.winnerId).toBe('zip-guest-g1')
+    // Cumulative tally: host still has its round-1 win, guest now has 1.
+    expect(r2?.standings.find((s) => s.id === HOST_ID)?.wins).toBe(1)
+    expect(r2?.standings.find((s) => s.id === 'zip-guest-g1')?.wins).toBe(1)
+
+    guest.close()
+    host.close()
+  })
+})
+
+describe('late join is dropped into the live phase (no dead lobby screen)', () => {
+  it('joining mid-race delivers the live puzzle + standings', async () => {
+    const hostInto = newHostInto()
+    const g1Into = newGuestInto()
+    const g2Into = newGuestInto()
+    const host = await createHostMatch(memoryTransport, ROOM, SETUP, hostEvents(hostInto))
+    const g1 = await createGuestMatch(memoryTransport, ROOM, guestEvents(g1Into), 'g1')
+    await settle()
+    g1.setReady(true)
+    await tick()
+    host.start()
+    await tick()
+
+    // g2 arrives after the race already started.
+    const g2 = await createGuestMatch(memoryTransport, ROOM, guestEvents(g2Into), 'g2')
+    await settle()
+
+    // The late joiner gets the in-progress puzzle and a standings snapshot.
+    expect(g2Into.setups).toHaveLength(1)
+    expect(g2Into.setups.at(-1)?.seed).toBe(SETUP.seed)
+    expect(g2Into.standings.length).toBeGreaterThanOrEqual(1)
+
+    g1.close()
+    g2.close()
+    host.close()
+  })
+
+  it('joining mid-results delivers the result and lets the newcomer complete the rematch vote', async () => {
+    const hostInto = newHostInto()
+    const g1Into = newGuestInto()
+    const g2Into = newGuestInto()
+    const host = await createHostMatch(memoryTransport, ROOM, SETUP, hostEvents(hostInto))
+    const g1 = await createGuestMatch(memoryTransport, ROOM, guestEvents(g1Into), 'g1')
+    await settle()
+    g1.setReady(true)
+    await tick()
+    host.start()
+    await tick()
+    host.reportSolved(1000)
+    await tick()
+
+    // g2 arrives during the results screen.
+    const g2 = await createGuestMatch(memoryTransport, ROOM, guestEvents(g2Into), 'g2')
+    await settle()
+    expect(g2Into.results).toHaveLength(1) // got the result -> can reach the vote
+
+    // Host + g1 vote but the newcomer (now counted) blocks the restart.
+    host.voteRematch()
+    g1.voteRematch()
+    await tick()
+    expect(hostInto.setups).toHaveLength(1)
+
+    // Newcomer votes -> everyone in -> restart.
+    g2.voteRematch()
+    await tick()
+    expect(hostInto.setups).toHaveLength(2)
+
+    g1.close()
+    g2.close()
+    host.close()
+  })
+})
+
+describe('disconnect terminal states', () => {
+  it('guest leaving the lobby drops its seat from the roster', async () => {
+    const hostInto = newHostInto()
+    const guestInto = newGuestInto()
+    const host = await createHostMatch(memoryTransport, ROOM, SETUP, hostEvents(hostInto))
+    const guest = await createGuestMatch(memoryTransport, ROOM, guestEvents(guestInto), 'g1')
+    await settle()
+    expect(hostInto.lobbies.at(-1)).toHaveLength(2)
+
+    guest.close()
+    await tick()
+    expect(hostInto.lobbies.at(-1)).toHaveLength(1)
+    expect(hostInto.lobbies.at(-1)?.[0]?.seat).toBe(1)
 
     host.close()
   })
 
-  it('host leaves mid-race => guest reaches result{outcome:abandoned, reason:opponent_left}', async () => {
-    const hostInto = {
-      results: [] as MatchResult[],
-      setups: [] as MatchSetup[],
-      rematches: [] as MatchSetup[],
-      opp: [] as number[],
-    }
-    const guestInto = {
-      results: [] as MatchResult[],
-      setups: [] as MatchSetup[],
-      rematches: [] as MatchSetup[],
-      opp: [] as number[],
-    }
-
+  it('host leaving mid-race => guest reaches a local host_left result', async () => {
+    const hostInto = newHostInto()
+    const guestInto = newGuestInto()
     const transport = notifyingTransport()
-    const host = await createHostMatch(
-      transport,
-      ROOM,
-      { seed: 3, difficulty: 3 },
-      hostEvents(hostInto),
-    )
+    const host = await createHostMatch(transport, ROOM, SETUP, hostEvents(hostInto))
     const guest = await createGuestMatch(transport, ROOM, guestEvents(guestInto), 'g1')
     await settle()
+    guest.setReady(true)
+    await tick()
+    host.start()
+    await tick()
 
-    // Host bails; the surviving guest gets onDisconnected. The guest has no
-    // authority to declare a winner, so it reaches a local 'abandoned' result.
     host.close()
     await tick()
 
     const terminal = guestInto.results.at(-1)
-    expect(terminal?.outcome).toBe('abandoned')
-    expect(terminal?.reason).toBe('opponent_left')
+    expect(terminal?.reason).toBe('host_left')
+    expect(terminal?.winnerId).toBeNull()
 
     guest.close()
-  })
-
-  it('neither side hangs: a guest disconnect yields a result, not silence', async () => {
-    const hostInto = {
-      results: [] as MatchResult[],
-      setups: [] as MatchSetup[],
-      rematches: [] as MatchSetup[],
-      opp: [] as number[],
-    }
-    const guestInto = {
-      results: [] as MatchResult[],
-      setups: [] as MatchSetup[],
-      rematches: [] as MatchSetup[],
-      opp: [] as number[],
-    }
-
-    const host = await createHostMatch(
-      memoryTransport,
-      ROOM,
-      { seed: 9, difficulty: 9 },
-      hostEvents(hostInto),
-    )
-    const guest = await createGuestMatch(memoryTransport, ROOM, guestEvents(guestInto), 'g1')
-    await settle()
-
-    guest.close()
-    await tick()
-
-    expect(hostInto.results.length).toBeGreaterThan(0)
-    host.close()
   })
 })
 
-describe('AC21 (through the controller): progress is throttled with an injected clock', () => {
-  it('many reportProgress calls under one window send at most one opp_progress', async () => {
-    const hostInto = {
-      results: [] as MatchResult[],
-      setups: [] as MatchSetup[],
-      rematches: [] as MatchSetup[],
-      opp: [] as number[],
-    }
-    const guestInto = {
-      results: [] as MatchResult[],
-      setups: [] as MatchSetup[],
-      rematches: [] as MatchSetup[],
-      opp: [] as number[],
-    }
-
+describe('AC7 (through the controller): standings broadcasts are throttled with an injected clock', () => {
+  it('many reportProgress calls under one window emit at most one standings update', async () => {
+    const hostInto = newHostInto()
+    const guestInto = newGuestInto()
     let clock = 1000
+    // Inject the clock into the HOST: its broadcastStandings throttle is the
+    // downstream rate limiter under test.
     const host = await createHostMatch(
       memoryTransport,
       ROOM,
-      { seed: 1, difficulty: 1 },
+      SETUP,
       hostEvents(hostInto),
-    )
-    const guest = await createGuestMatch(
-      memoryTransport,
-      ROOM,
-      guestEvents(guestInto),
-      'g1',
       () => clock,
     )
+    const guest = await createGuestMatch(memoryTransport, ROOM, guestEvents(guestInto), 'g1')
     await settle()
+    guest.setReady(true)
+    await tick()
+    host.start()
+    await tick()
+    const baseline = hostInto.standings.length
 
-    // Burst of guest progress within a single 250ms window.
+    // Burst of the host's own progress within a single 250ms window.
     for (let i = 1; i <= 16; i++) {
       clock += 5 // 16 * 5 = 80ms, all under one window
-      guest.reportProgress(i, 16)
+      host.reportProgress(i, 16)
     }
     await tick()
-    // Host saw exactly one opp_progress.
-    expect(hostInto.opp.length).toBe(1)
+    expect(hostInto.standings.length - baseline).toBe(1)
 
     // Cross a window boundary -> one more passes.
     clock += 250
-    guest.reportProgress(16, 16)
+    host.reportProgress(16, 16)
     await tick()
-    expect(hostInto.opp.length).toBe(2)
-
-    guest.close()
-    host.close()
-  })
-})
-
-describe('rematch: same room, fresh seed, same difficulty', () => {
-  it('host startRematch: guest receives rematch_setup with new seed, same difficulty', async () => {
-    const hostInto = {
-      results: [] as MatchResult[],
-      setups: [] as MatchSetup[],
-      rematches: [] as MatchSetup[],
-      opp: [] as number[],
-    }
-    const guestInto = {
-      results: [] as MatchResult[],
-      setups: [] as MatchSetup[],
-      rematches: [] as MatchSetup[],
-      opp: [] as number[],
-    }
-
-    const initialSetup: MatchSetup = { seed: 100, difficulty: 30 }
-    const host = await createHostMatch(memoryTransport, ROOM, initialSetup, hostEvents(hostInto))
-    const guest = await createGuestMatch(memoryTransport, ROOM, guestEvents(guestInto), 'g1')
-    await settle()
-
-    // Finish the first round.
-    host.reportSolved(1000)
-    await tick()
-    expect(hostInto.results.length).toBeGreaterThan(0)
-
-    // Host triggers rematch with a new seed.
-    const newSeed = 9999
-    host.startRematch(newSeed)
-    await tick()
-
-    // Host side: onRematchSetup fired with new seed, same difficulty.
-    expect(hostInto.rematches).toHaveLength(1)
-    expect(hostInto.rematches[0]).toEqual({ seed: newSeed, difficulty: 30 })
-
-    // Guest side: onRematchSetup fired too.
-    expect(guestInto.rematches).toHaveLength(1)
-    expect(guestInto.rematches[0]).toEqual({ seed: newSeed, difficulty: 30 })
-
-    guest.close()
-    host.close()
-  })
-
-  it('guest requestRematch: host responds with rematch_setup (new seed, same difficulty)', async () => {
-    const hostInto = {
-      results: [] as MatchResult[],
-      setups: [] as MatchSetup[],
-      rematches: [] as MatchSetup[],
-      opp: [] as number[],
-    }
-    const guestInto = {
-      results: [] as MatchResult[],
-      setups: [] as MatchSetup[],
-      rematches: [] as MatchSetup[],
-      opp: [] as number[],
-    }
-
-    const initialSetup: MatchSetup = { seed: 200, difficulty: 12 }
-    const host = await createHostMatch(memoryTransport, ROOM, initialSetup, hostEvents(hostInto))
-    const guest = await createGuestMatch(memoryTransport, ROOM, guestEvents(guestInto), 'g1')
-    await settle()
-
-    // Finish the first round.
-    guest.reportSolved(800)
-    host.reportSolved(1200)
-    await tick()
-
-    // Guest requests a rematch; host generates a new seed autonomously.
-    guest.requestRematch()
-    await tick()
-
-    // Both sides receive onRematchSetup with the same difficulty and a new seed.
-    expect(hostInto.rematches).toHaveLength(1)
-    expect(guestInto.rematches).toHaveLength(1)
-    const hostRematch = hostInto.rematches[0]
-    const guestRematch = guestInto.rematches[0]
-    expect(hostRematch).toBeDefined()
-    expect(guestRematch).toBeDefined()
-    if (hostRematch !== undefined && guestRematch !== undefined) {
-      expect(hostRematch.difficulty).toBe(12)
-      expect(guestRematch.difficulty).toBe(12)
-      expect(hostRematch.seed).toBe(guestRematch.seed)
-      // New seed must differ from the initial seed (extremely unlikely to collide).
-      expect(hostRematch.seed).not.toBe(200)
-    }
+    expect(hostInto.standings.length - baseline).toBe(2)
 
     guest.close()
     host.close()

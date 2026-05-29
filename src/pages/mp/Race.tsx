@@ -7,30 +7,25 @@ import { Timer } from '../../components/Timer'
 import type { Puzzle } from '../../game/types'
 import { useBoardPath } from '../../hooks/useBoardPath'
 import { useTimer } from '../../hooks/useTimer'
+import type { Standing } from '../../transport/messages'
+import { seatLabel } from './labels'
 
-// The live 1v1 race. Both players draw the SAME puzzle (same seed). The local
-// fill drives the player's own ProgressBar and, throttled, the opponent's view
-// via match.reportProgress. On solve we stop the clock and report the elapsed
-// time; the host is authoritative for the verdict. Reporting progress/solve to
-// the wire is a genuine side effect, so it lives in effects — not derived state.
+// The live N-player race. Everyone draws the SAME puzzle (same seed). The local
+// fill drives the player's own ProgressBar and, throttled, the host's standings
+// via reportProgress. On solve we stop the clock and report the elapsed time;
+// the host is authoritative for the verdict. Opponents' live fill comes from the
+// host's `standings` broadcast. Reporting to the wire is a genuine side effect,
+// so it lives in an effect — not derived state.
 
 export type RaceViewProps = {
   puzzle: Puzzle
-  side: 'host' | 'guest'
-  oppFilled: number
-  oppTotal: number
+  standings: Standing[]
+  myId: string | null
   reportProgress: (filled: number, total: number) => void
   reportSolved: (timeMs: number) => void
 }
 
-export function RaceView({
-  puzzle,
-  side,
-  oppFilled,
-  oppTotal,
-  reportProgress,
-  reportSolved,
-}: RaceViewProps) {
+export function RaceView({ puzzle, standings, myId, reportProgress, reportSolved }: RaceViewProps) {
   const timer = useTimer()
   const boardRef = useRef<HTMLDivElement>(null)
   const { filled } = useBoardPath(boardRef, puzzle)
@@ -40,8 +35,8 @@ export function RaceView({
   const reportProgressRef = useRef(reportProgress)
   reportProgressRef.current = reportProgress
 
-  // Push local fill to the opponent. The throttle inside the match controller
-  // caps the actual wire rate; this just feeds it every committed change.
+  // Push local fill to the host. The throttle inside the match controller caps
+  // the actual wire rate; this just feeds it every committed change.
   useEffect(() => {
     reportProgressRef.current(filled, total)
   }, [filled, total])
@@ -55,6 +50,8 @@ export function RaceView({
     reportSolved(timeMs)
   }, [timer, reportSolved])
 
+  const opponents = standings.filter((s) => s.id !== myId)
+
   return (
     <main className="fade-in mx-auto flex min-h-[100dvh] max-w-md flex-col gap-4 px-5 py-6">
       <div className="decorative-grid decorative-grid--masked" aria-hidden="true" />
@@ -67,7 +64,7 @@ export function RaceView({
         data-difficulty={puzzle.meta.gameNumber}
       >
         <span className="font-[var(--font-mono)] text-[13px] uppercase tracking-widest text-[var(--color-accent)]">
-          1v1 · {side === 'host' ? 'anfitrião' : 'convidado'}
+          multiplayer
         </span>
         <span className="font-[var(--font-mono)] text-[15px] font-bold tracking-tight text-[var(--color-text-muted)]">
           #{String(puzzle.meta.gameNumber).padStart(3, '0')}
@@ -77,7 +74,14 @@ export function RaceView({
 
       <div className="flex flex-col gap-2">
         <ProgressBar filled={filled} total={total} />
-        <OpponentProgress filled={oppFilled} total={oppTotal > 0 ? oppTotal : total} />
+        {opponents.map((o) => (
+          <OpponentProgress
+            key={o.id}
+            filled={o.filled}
+            total={o.total > 0 ? o.total : total}
+            label={seatLabel(o.seat)}
+          />
+        ))}
       </div>
 
       <div className="relative flex flex-1 items-center justify-center py-4">

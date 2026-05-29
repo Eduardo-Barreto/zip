@@ -2,19 +2,19 @@ import type { Page } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 import { generatePuzzleWith } from '../../src/game/generate'
 
-// AC22: a real 1v1 over the broadcast transport (the dev server runs
+// A real multiplayer match over the broadcast transport (the dev server runs
 // VITE_TRANSPORT=broadcast). Two browser PAGES share one BroadcastChannel-backed
-// room:
-//   1. Page A opens #/mp/host, selects Fácil difficulty, and waits for a code.
-//   2. Page B opens #/mp/join/<code> and connects.
-//   3. BOTH reach the race on the SAME puzzle — board visible on both, same
+// room and exercise the full N-player flow at N=2:
+//   1. Page A opens #/mp/host, selects Fácil difficulty, opens the room.
+//   2. Page B opens #/mp/join/<code> and lands in the lobby.
+//   3. Guest marks Pronto; host's "Iniciar partida" enables; host starts.
+//   4. BOTH reach the race on the SAME puzzle — board visible on both, same
 //      level badge (#003 for difficulty=3).
-//   4. The host solves by drawing the exact solution (recomputed in the test
+//   5. The host solves by drawing the exact solution (recomputed in the test
 //      process from data-seed / data-difficulty the race header exposes).
-//   5. Host is declared winner; guest gets 'lost'.
-//   6. Host clicks "Jogar novamente" — SAME room, new puzzle. Both pages return
-//      to the race board, confirming in-place rematch works; the new seed
-//      differs from the first (random per match).
+//   6. Host is declared winner; guest gets 'lost'; the scoreboard shows the win.
+//   7. Rematch needs BOTH: the host votes and sees "aguardando"; only after the
+//      guest also votes does the SAME room start a fresh puzzle (new seed).
 //
 // DEVIATION (justified): the brief says "two browser contexts". BroadcastChannel
 // is partitioned per origin AND per browsing-context group, so messages do NOT
@@ -54,7 +54,7 @@ async function drawSolution(page: Page): Promise<void> {
   await page.mouse.up()
 }
 
-test('AC22: two pages race over broadcast; first solver wins, loser gets result', async ({
+test('multiplayer: lobby ready-up, host starts, first solver wins, all-vote rematch', async ({
   browser,
 }) => {
   const context = await browser.newContext()
@@ -80,10 +80,19 @@ test('AC22: two pages race over broadcast; first solver wins, loser gets result'
   const roomCode = (await codeEl.textContent())?.trim() ?? ''
   expect(roomCode).toMatch(/^[ABCDEFGHJKLMNPQRSTUVWXYZ]{4}$/)
 
-  // 3. Guest joins via the deep link.
+  // 3. Guest joins via the deep link and lands in the lobby.
   await guest.goto(`/#/mp/join/${roomCode}`)
+  await expect(guest.getByTestId('ready-toggle')).toBeVisible({ timeout: 15_000 })
 
-  // 4. Both reach the race — board visible on both, same difficulty badge.
+  // The host cannot start until the guest is ready.
+  await expect(host.getByTestId('start-match')).toBeDisabled()
+
+  // 4. Guest marks Pronto -> host's start button enables -> host starts.
+  await guest.getByTestId('ready-toggle').click()
+  await expect(host.getByTestId('start-match')).toBeEnabled({ timeout: 15_000 })
+  await host.getByTestId('start-match').click()
+
+  // 5. Both reach the race — board visible on both, same difficulty badge.
   await expect(host.getByTestId('board')).toBeVisible({ timeout: 15_000 })
   await expect(guest.getByTestId('board')).toBeVisible({ timeout: 15_000 })
   await expect(host.getByText('#003')).toBeVisible()
@@ -92,21 +101,26 @@ test('AC22: two pages race over broadcast; first solver wins, loser gets result'
   // Record seed for first round (to verify rematch changes it).
   const firstSeed = await host.locator('[data-testid="race-header"]').getAttribute('data-seed')
 
-  // 5. Host draws the exact solution (computed from data-seed + data-difficulty).
+  // 6. Host draws the exact solution (computed from data-seed + data-difficulty).
   await drawSolution(host)
 
-  // 6. Host wins; guest gets lost.
+  // 7. Host wins; guest gets lost; the scoreboard records the host's win.
   await expect(host.getByTestId('result')).toHaveAttribute('data-outcome', 'won', {
     timeout: 15_000,
   })
   await expect(guest.getByTestId('result')).toHaveAttribute('data-outcome', 'lost', {
     timeout: 15_000,
   })
+  await expect(host.getByTestId('standings')).toBeVisible()
+  await expect(host.getByTestId('wins-1')).toContainText('1')
 
-  // 7. Same-room rematch: host clicks "Jogar novamente". The peer connection
-  //    stays open; both pages transition back to the race with a fresh board.
+  // 8. Rematch needs BOTH. Host votes first and waits; nobody restarts yet.
   await host.getByTestId('rematch').click()
+  await expect(host.getByTestId('rematch-waiting')).toBeVisible()
+  await expect(host.getByTestId('board')).toBeHidden()
 
+  // Guest votes too -> SAME room starts a fresh puzzle on both pages.
+  await guest.getByTestId('rematch').click()
   await expect(host.getByTestId('board')).toBeVisible({ timeout: 15_000 })
   await expect(guest.getByTestId('board')).toBeVisible({ timeout: 15_000 })
 

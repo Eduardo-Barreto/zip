@@ -41,7 +41,7 @@ export default function Home() {
           to="/mp/host"
           className="spotlight-card card-lift rounded-xl px-6 py-3 text-center text-[15px] text-[var(--color-text)]"
         >
-          Criar sala 1v1
+          Criar sala multiplayer
         </Link>
         <Link
           to="/mp/join"
