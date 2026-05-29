@@ -1,11 +1,10 @@
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Navigate } from 'react-router-dom'
 import type { MatchResult } from '../../hooks/matchController'
 
-// 1v1 result screen. Shown inline by Host/Join when the match reaches a
-// terminal state, and also reachable as the lazy /mp/result route (which has no
-// live match, so it just bounces home). Outcome wording is from the LOCAL
-// player's perspective: the host sees 'host' as a win, the guest sees 'host' as
-// a loss; 'abandoned' means the opponent left and there is no verdict.
+// 1v1 result screen. Both host and guest get a "Jogar novamente" button that
+// keeps the same peer room. Host: triggers a fresh-seed rematch in-place.
+// Guest: sends a rematch request; the host responds with rematch_setup.
+// Outcome wording is from the LOCAL player's perspective.
 
 type Verdict = 'won' | 'lost' | 'abandoned'
 
@@ -32,12 +31,13 @@ function fmt(ms: number | null): string {
 export type ResultViewProps = {
   result: MatchResult
   side: 'host' | 'guest'
-  canRematch: boolean
+  /** Called when the player clicks "Jogar novamente". */
   onRematch: () => void
+  /** Called when the player clicks "Sair". */
+  onLeave: () => void
 }
 
-export function ResultView({ result, side, canRematch, onRematch }: ResultViewProps) {
-  const navigate = useNavigate()
+export function ResultView({ result, side, onRematch, onLeave }: ResultViewProps) {
   const verdict = verdictFor(result, side)
   const copy = COPY[verdict]
 
@@ -75,27 +75,25 @@ export function ResultView({ result, side, canRematch, onRematch }: ResultViewPr
       ) : null}
 
       <div className="flex flex-col gap-3">
-        {canRematch ? (
-          <button
-            type="button"
-            onClick={onRematch}
-            data-testid="rematch"
-            className="card-lift rounded-xl px-6 py-4 text-center font-[var(--font-mono)] text-[16px] font-bold tracking-tight text-[#0a0a0a] active:scale-95"
-            style={{
-              backgroundColor: 'var(--color-accent)',
-              boxShadow:
-                '0 12px 36px -12px color-mix(in srgb, var(--color-accent) 70%, transparent)',
-            }}
-          >
-            Revanche
-          </button>
-        ) : null}
         <button
           type="button"
-          onClick={() => navigate('/')}
+          onClick={onRematch}
+          data-testid="rematch"
+          className="card-lift rounded-xl px-6 py-4 text-center font-[var(--font-mono)] text-[16px] font-bold tracking-tight text-[#0a0a0a] active:scale-95"
+          style={{
+            backgroundColor: 'var(--color-accent)',
+            boxShadow: '0 12px 36px -12px color-mix(in srgb, var(--color-accent) 70%, transparent)',
+          }}
+        >
+          Jogar novamente
+        </button>
+        <button
+          type="button"
+          onClick={onLeave}
+          data-testid="leave"
           className="spotlight-card card-lift rounded-xl px-6 py-3 text-center text-[15px] text-[var(--color-text)]"
         >
-          Início
+          Sair
         </button>
       </div>
     </main>

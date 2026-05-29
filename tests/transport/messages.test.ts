@@ -17,8 +17,8 @@ const VALID_GUEST_TO_HOST: GuestToHost[] = [
 
 const VALID_HOST_TO_GUEST: HostToGuest[] = [
   { t: 'welcome' },
-  { t: 'match_setup', gameNumber: 1 },
-  { t: 'match_setup', gameNumber: 10000 },
+  { t: 'match_setup', seed: 123456, difficulty: 1 },
+  { t: 'match_setup', seed: 0, difficulty: 60 },
   { t: 'opp_progress', filled: 3, total: 25 },
   { t: 'result', outcome: 'host', reason: 'solved', times: { host: 100, guest: 200 } },
   { t: 'result', outcome: 'guest', reason: 'solved', times: { host: 300, guest: 200 } },
@@ -29,7 +29,7 @@ const VALID_HOST_TO_GUEST: HostToGuest[] = [
     reason: 'opponent_left',
     times: { host: null, guest: null },
   },
-  { t: 'rematch_setup', gameNumber: 42 },
+  { t: 'rematch_setup', seed: 999, difficulty: 12 },
 ]
 
 describe('AC18: round-trip parse + validate for every valid variant', () => {
@@ -82,14 +82,25 @@ describe('AC19: hostile payloads rejected (return null)', () => {
   }
 
   const hostileHost: Array<[string, unknown]> = [
-    ['missing t', { gameNumber: 1 }],
+    ['missing t', { seed: 1, difficulty: 1 }],
     ['wrong/unknown t', { t: 'nope' }],
     ['array where object expected', ['welcome']],
-    ['match_setup: gameNumber string', { t: 'match_setup', gameNumber: '1' }],
-    ['match_setup: gameNumber NaN', { t: 'match_setup', gameNumber: Number.NaN }],
-    ['rematch_setup: missing gameNumber', { t: 'rematch_setup' }],
+    // match_setup hostile payloads
+    ['match_setup: missing seed', { t: 'match_setup', difficulty: 1 }],
+    ['match_setup: missing difficulty', { t: 'match_setup', seed: 1 }],
+    ['match_setup: seed string', { t: 'match_setup', seed: '1', difficulty: 1 }],
+    ['match_setup: difficulty string', { t: 'match_setup', seed: 1, difficulty: '1' }],
+    ['match_setup: difficulty NaN', { t: 'match_setup', seed: 1, difficulty: Number.NaN }],
+    ['match_setup: difficulty zero (< 1)', { t: 'match_setup', seed: 1, difficulty: 0 }],
+    ['match_setup: difficulty negative', { t: 'match_setup', seed: 1, difficulty: -5 }],
+    ['match_setup: seed NaN', { t: 'match_setup', seed: Number.NaN, difficulty: 1 }],
+    // rematch_setup hostile payloads
+    ['rematch_setup: missing seed', { t: 'rematch_setup', difficulty: 12 }],
+    ['rematch_setup: difficulty zero', { t: 'rematch_setup', seed: 1, difficulty: 0 }],
+    // opp_progress
     ['opp_progress: filled string', { t: 'opp_progress', filled: 'x', total: 1 }],
     ['opp_progress: total negative', { t: 'opp_progress', filled: 1, total: -3 }],
+    // result
     ['result: nested times missing', { t: 'result', outcome: 'host', reason: 'solved' }],
     [
       'result: times is array not object',
@@ -111,7 +122,10 @@ describe('AC19: hostile payloads rejected (return null)', () => {
       'result: guest time string',
       { t: 'result', outcome: 'host', reason: 'solved', times: { host: 1, guest: '2' } },
     ],
-    ['__proto__ polluted', JSON.parse('{"t":"match_setup","gameNumber":1,"__proto__":{"x":1}}')],
+    [
+      '__proto__ polluted',
+      JSON.parse('{"t":"match_setup","seed":1,"difficulty":1,"__proto__":{"x":1}}'),
+    ],
   ]
 
   for (const [label, payload] of hostileHost) {

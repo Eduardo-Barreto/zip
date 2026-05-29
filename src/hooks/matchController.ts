@@ -25,17 +25,27 @@ export function resolveOutcome(hostMs: number, guestMs: number): MatchResult {
   return { outcome, reason: 'solved', times: { host: hostMs, guest: guestMs } }
 }
 
+/** Generate a non-deterministic match seed (lives in hooks/, outside src/game). */
+export function randomMatchSeed(): number {
+  return Math.floor(Math.random() * 0x7fffffff)
+}
+
+export type MatchSetup = { seed: number; difficulty: number }
+
 export type HostEvents = {
   onGuestConnect: () => void
-  onSetup: (gameNumber: number) => void
+  onSetup: (setup: MatchSetup) => void
   onOppProgress: (filled: number, total: number) => void
   onResult: (result: MatchResult) => void
+  onRematchSetup: (setup: MatchSetup) => void
   onError: (message: string) => void
 }
 
 export type HostMatch = {
   reportProgress: (filled: number, total: number) => void
   reportSolved: (timeMs: number) => void
+  /** Host initiates a rematch: new random seed, same difficulty, stays in room. */
+  startRematch: (newSeed: number) => void
   close: () => void
 }
 
@@ -43,7 +53,7 @@ export type HostMatch = {
 export function createHostMatch(
   transport: TransportFactory,
   roomCode: string,
-  gameNumber: number,
+  initialSetup: MatchSetup,
   events: HostEvents,
   now: () => number = () => performance.now(),
 ): Promise<HostMatch> {
@@ -52,6 +62,7 @@ export function createHostMatch(
   let hostTime: number | null = null
   let guestTime: number | null = null
   let finished = false
+  const currentDifficulty = initialSetup.difficulty
   const throttle: ProgressThrottle = makeProgressThrottle(now)
 
   function broadcast(result: MatchResult) {
@@ -92,6 +103,15 @@ export function createHostMatch(
     })
   }
 
+  function resetRace() {
+    hostTime = null
+    guestTime = null
+    finished = false
+    resolveScheduled = false
+    // Reset the throttle so the new race starts fresh.
+    throttle.reset()
+  }
+
   return transport
     .createHost(hostPeerId(roomCode), {
       onClientConnect: (clientId) => {
@@ -99,9 +119,13 @@ export function createHostMatch(
         if (guestId !== null) return
         guestId = clientId
         host?.send(clientId, { t: 'welcome' })
-        host?.send(clientId, { t: 'match_setup', gameNumber })
+        host?.send(clientId, {
+          t: 'match_setup',
+          seed: initialSetup.seed,
+          difficulty: initialSetup.difficulty,
+        })
         events.onGuestConnect()
-        events.onSetup(gameNumber)
+        events.onSetup(initialSetup)
       },
       onClientMessage: (clientId, raw) => {
         if (clientId !== guestId) return
@@ -131,6 +155,18 @@ export function createHostMatch(
           hostTime = timeMs
           tryResolve()
         },
+        startRematch: (newSeed: number) => {
+          resetRace()
+          const setup: MatchSetup = { seed: newSeed, difficulty: currentDifficulty }
+          if (guestId !== null) {
+            host?.send(guestId, {
+              t: 'rematch_setup',
+              seed: newSeed,
+              difficulty: currentDifficulty,
+            })
+          }
+          events.onRematchSetup(setup)
+        },
         close: () => h.close(),
       }
     })
@@ -141,21 +177,33 @@ export function createHostMatch(
     } else if (msg.t === 'solved') {
       guestTime = msg.timeMs
       tryResolve()
+    } else if (msg.t === 'rematch') {
+      // Guest requests a rematch; host generates a new seed and responds.
+      const newSeed = randomMatchSeed()
+      resetRace()
+      const setup: MatchSetup = { seed: newSeed, difficulty: currentDifficulty }
+      if (guestId !== null) {
+        host?.send(guestId, { t: 'rematch_setup', seed: newSeed, difficulty: currentDifficulty })
+      }
+      events.onRematchSetup(setup)
     }
   }
 }
 
 export type GuestEvents = {
   onConnected: () => void
-  onSetup: (gameNumber: number) => void
+  onSetup: (setup: MatchSetup) => void
   onOppProgress: (filled: number, total: number) => void
   onResult: (result: MatchResult) => void
+  onRematchSetup: (setup: MatchSetup) => void
   onError: (message: string) => void
 }
 
 export type GuestMatch = {
   reportProgress: (filled: number, total: number) => void
   reportSolved: (timeMs: number) => void
+  /** Guest requests a rematch (host responds with rematch_setup). */
+  requestRematch: () => void
   close: () => void
 }
 
@@ -202,8 +250,12 @@ export function createGuestMatch(
           case 'welcome':
             break
           case 'match_setup':
+            events.onSetup({ seed: msg.seed, difficulty: msg.difficulty })
+            break
           case 'rematch_setup':
-            events.onSetup(msg.gameNumber)
+            finished = false
+            throttle.reset()
+            events.onRematchSetup({ seed: msg.seed, difficulty: msg.difficulty })
             break
           case 'opp_progress':
             events.onOppProgress(msg.filled, msg.total)
@@ -239,6 +291,9 @@ export function createGuestMatch(
         },
         reportSolved: (timeMs: number) => {
           send({ t: 'solved', timeMs })
+        },
+        requestRematch: () => {
+          send({ t: 'rematch' })
         },
         close: () => c.close(),
       }

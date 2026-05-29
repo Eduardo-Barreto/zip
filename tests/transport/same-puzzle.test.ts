@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { canonicalPuzzle, generatePuzzle } from '../../src/game/generate'
+import { canonicalPuzzle, generatePuzzleWith } from '../../src/game/generate'
 import { broadcastTransport } from '../../src/transport/broadcast-transport'
 import { memoryTransport, resetMemoryTransport } from '../../src/transport/memory-transport'
 import type { GuestToHost, HostToGuest } from '../../src/transport/messages'
@@ -33,18 +33,20 @@ afterEach(() => {
 })
 
 /**
- * AC20: only `gameNumber` crosses the wire. Both sides call
- * generatePuzzle(gameNumber) and must produce the identical canonical puzzle —
- * proving same-seed → same puzzle across the transport.
+ * AC20: only `{seed, difficulty}` cross the wire. Both sides call
+ * generatePuzzleWith(seed, difficulty) and must produce the identical canonical
+ * puzzle — proving same-seed → same puzzle across the transport.
  */
 function sameWirePuzzleTest(factory: TransportFactory, label: string) {
-  it(`${label}: host announces gameNumber, both regenerate the identical puzzle`, async () => {
-    let guestReceivedGameNumber: number | null = null
+  it(`${label}: host announces seed+difficulty, both regenerate the identical puzzle`, async () => {
+    // Use an object with a mutable field so TypeScript can narrow through
+    // the closure assignment without losing type information.
+    const state: { received: { seed: number; difficulty: number } | null } = { received: null }
 
     const guestHandlers: ClientHandlers = {
       ...noopClient(),
       onMessage: (msg: HostToGuest) => {
-        if (msg.t === 'match_setup') guestReceivedGameNumber = msg.gameNumber
+        if (msg.t === 'match_setup') state.received = { seed: msg.seed, difficulty: msg.difficulty }
       },
     }
 
@@ -54,16 +56,21 @@ function sameWirePuzzleTest(factory: TransportFactory, label: string) {
     // Let the connection handshake settle (queueMicrotask / setTimeout(0)).
     await new Promise((r) => setTimeout(r, 20))
 
-    const hostChosenGameNumber = 137
-    host.broadcast({ t: 'match_setup', gameNumber: hostChosenGameNumber })
+    const hostSeed = 137
+    const hostDifficulty = 12
+    host.broadcast({ t: 'match_setup', seed: hostSeed, difficulty: hostDifficulty })
 
     await new Promise((r) => setTimeout(r, 20))
 
-    expect(guestReceivedGameNumber).toBe(hostChosenGameNumber)
-    if (guestReceivedGameNumber === null) throw new Error('guest never got match_setup')
+    expect(state.received).toEqual({ seed: hostSeed, difficulty: hostDifficulty })
+    // state.received is an object property — TS can narrow it after a null check.
+    const r = state.received
+    if (r === null) throw new Error('guest never got match_setup')
+    const receivedSeed = r.seed
+    const receivedDifficulty = r.difficulty
 
-    const hostPuzzle = generatePuzzle(hostChosenGameNumber)
-    const guestPuzzle = generatePuzzle(guestReceivedGameNumber)
+    const hostPuzzle = generatePuzzleWith(hostSeed, hostDifficulty)
+    const guestPuzzle = generatePuzzleWith(receivedSeed, receivedDifficulty)
 
     expect(canonicalPuzzle(guestPuzzle)).toEqual(canonicalPuzzle(hostPuzzle))
 
@@ -72,7 +79,7 @@ function sameWirePuzzleTest(factory: TransportFactory, label: string) {
   })
 }
 
-describe('AC20: same gameNumber across the wire -> identical canonical puzzle', () => {
+describe('AC20: same seed+difficulty across the wire -> identical canonical puzzle', () => {
   sameWirePuzzleTest(memoryTransport, 'memoryTransport')
   sameWirePuzzleTest(broadcastTransport, 'broadcastTransport')
 })

@@ -61,12 +61,14 @@ export function validateHostToGuest(raw: unknown): HostToGuest | null {
     case 'welcome':
       return { t: 'welcome' }
     case 'match_setup': {
-      if (!isFiniteNumber(raw.gameNumber)) return null
-      return { t: 'match_setup', gameNumber: raw.gameNumber }
+      if (!isFiniteNumber(raw.seed) || !isFiniteNumber(raw.difficulty)) return null
+      if (raw.difficulty < 1) return null
+      return { t: 'match_setup', seed: raw.seed, difficulty: raw.difficulty }
     }
     case 'rematch_setup': {
-      if (!isFiniteNumber(raw.gameNumber)) return null
-      return { t: 'rematch_setup', gameNumber: raw.gameNumber }
+      if (!isFiniteNumber(raw.seed) || !isFiniteNumber(raw.difficulty)) return null
+      if (raw.difficulty < 1) return null
+      return { t: 'rematch_setup', seed: raw.seed, difficulty: raw.difficulty }
     }
     case 'opp_progress': {
       if (!isFiniteNumber(raw.filled) || !isFiniteNumber(raw.total)) return null

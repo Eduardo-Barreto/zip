@@ -56,11 +56,11 @@ describe('usePeerClient (guest hook, no kick)', () => {
 
     // Valid message is delivered; a malformed one is dropped at the app edge.
     act(() => {
-      host?.send(clientId, { t: 'match_setup', gameNumber: 5 })
+      host?.send(clientId, { t: 'match_setup', seed: 5, difficulty: 3 })
       host?.send(clientId, { t: 'bogus' } as unknown as HostToGuest)
     })
     await waitFor(() => expect(received.length).toBe(1))
-    expect(received[0]).toEqual({ t: 'match_setup', gameNumber: 5 })
+    expect(received[0]).toEqual({ t: 'match_setup', seed: 5, difficulty: 3 })
 
     host.close()
   })

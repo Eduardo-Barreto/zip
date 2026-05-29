@@ -51,7 +51,8 @@ export function parseHostToGuest(v: unknown): HostToGuest | null {
       return { t: 'welcome' }
     case 'match_setup':
     case 'rematch_setup':
-      if (!isFiniteNumber(v.gameNumber)) return null
+      if (!isFiniteNumber(v.seed) || !isFiniteNumber(v.difficulty)) return null
+      if (v.difficulty < 1) return null
       return v as unknown as HostToGuest
     case 'opp_progress':
       if (!isFiniteNumber(v.filled) || !isFiniteNumber(v.total)) return null

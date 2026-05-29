@@ -19,7 +19,7 @@ export type ResultReason = 'solved' | 'opponent_left'
 
 export type HostToGuest =
   | { t: 'welcome' }
-  | { t: 'match_setup'; gameNumber: number }
+  | { t: 'match_setup'; seed: number; difficulty: number }
   | { t: 'opp_progress'; filled: number; total: number }
   | {
       t: 'result'
@@ -27,4 +27,4 @@ export type HostToGuest =
       reason: ResultReason
       times: { host: number | null; guest: number | null }
     }
-  | { t: 'rematch_setup'; gameNumber: number }
+  | { t: 'rematch_setup'; seed: number; difficulty: number }

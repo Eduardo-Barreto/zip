@@ -21,7 +21,7 @@ function twoSolutionPuzzle(): Puzzle {
     ]),
     walls: new Set<string>(),
     solution: [0, 1, 2, 5, 4, 3, 6, 7, 8],
-    meta: { gameNumber: 0, unique: false, difficultyScore: 0 },
+    meta: { gameNumber: 0, seed: 0, unique: false, difficultyScore: 0 },
   }
 }
 

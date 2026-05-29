@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { generatePuzzle } from '../../game/generate'
+import { generatePuzzleWith } from '../../game/generate'
 import { useMatch } from '../../hooks/useMatch'
 import { getTransport } from '../../transport'
 import { isValidRoomCode } from '../../transport/peer-ids'
@@ -9,9 +9,8 @@ import { ResultView } from './Result'
 
 // Join page: arrive with a room code in the URL (#/mp/join/:roomCode from the
 // host's link/QR) or type one in. Once a valid code is confirmed we connect as
-// the guest and run the live race. The host stays authoritative for the
-// verdict, so the guest only returns home from the result (no rematch button —
-// the host drives any rematch).
+// the guest. Both players can request a rematch in-place; the host is
+// authoritative and responds with rematch_setup carrying a fresh seed.
 
 export default function Join() {
   const params = useParams()
@@ -99,24 +98,29 @@ type JoinSessionProps = {
 function JoinSession({ roomCode }: JoinSessionProps) {
   const navigate = useNavigate()
   const transport = useMemo(() => getTransport(), [])
-  const { state, reportProgress, reportSolved } = useMatch({
+  const { state, reportProgress, reportSolved, triggerRematch } = useMatch({
     role: 'guest',
     roomCode,
     transport,
   })
 
+  const setup = state.setup
   const puzzle = useMemo(
-    () => (state.gameNumber !== null ? generatePuzzle(state.gameNumber) : null),
-    [state.gameNumber],
+    () => (setup !== null ? generatePuzzleWith(setup.seed, setup.difficulty) : null),
+    [setup],
   )
+
+  const handleRematch = useCallback(() => {
+    triggerRematch()
+  }, [triggerRematch])
 
   if (state.result !== null) {
     return (
       <ResultView
         result={state.result}
         side="guest"
-        canRematch={false}
-        onRematch={() => navigate('/')}
+        onRematch={handleRematch}
+        onLeave={() => navigate('/')}
       />
     )
   }

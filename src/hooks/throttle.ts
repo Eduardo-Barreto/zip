@@ -6,6 +6,8 @@
 export type ProgressThrottle = {
   /** True iff at least windowMs have elapsed since the last emitted send. */
   shouldSend: () => boolean
+  /** Reset the gate so the next call to shouldSend always passes (use on rematch). */
+  reset: () => void
 }
 
 export const PROGRESS_THROTTLE_MS = 250
@@ -28,6 +30,9 @@ export function makeProgressThrottle(
         return true
       }
       return false
+    },
+    reset: () => {
+      lastSent = Number.NEGATIVE_INFINITY
     },
   }
 }

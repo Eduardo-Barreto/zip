@@ -11,10 +11,25 @@ import type { Cell, Puzzle, WallKey } from './types'
  * does NOT use. Deterministic from `seed = gameNumber`. Fast and pure — the
  * (optional, bounded) uniqueness check runs later off the main thread, never
  * here, so generation stays within the perf budget (AC10).
+ *
+ * Single-player: seed === gameNumber === difficulty (all three collapse to N).
  */
 export function generatePuzzle(gameNumber: number): Puzzle {
-  const prng = mulberry32(gameNumber >>> 0)
-  const p = paramsFor(gameNumber)
+  return generatePuzzleWith(gameNumber, gameNumber)
+}
+
+/**
+ * Multiplayer variant: the PRNG seed and the difficulty tier are independent.
+ * The host picks a random `seed` per match (outside src/game) and broadcasts it
+ * alongside the chosen `difficulty`; both peers call this with identical
+ * arguments and get the identical puzzle (determinism guarantee preserved).
+ *
+ * `gameNumber` in the meta is set to `difficulty` so display code (level badge,
+ * score) continues to key off the difficulty tier, not the random seed.
+ */
+export function generatePuzzleWith(seed: number, difficulty: number): Puzzle {
+  const prng = mulberry32(seed >>> 0)
+  const p = paramsFor(difficulty)
 
   const solution = hamiltonianPath(p.rows, p.cols, prng)
   const numbers = placeCheckpoints(solution, p.checkpoints)
@@ -27,7 +42,8 @@ export function generatePuzzle(gameNumber: number): Puzzle {
     walls,
     solution,
     meta: {
-      gameNumber,
+      gameNumber: difficulty,
+      seed,
       unique: false, // set true only after a bounded solver confirms it
       difficultyScore: scoreOf(p.rows * p.cols, p.wallDensity, p.checkpoints),
     },

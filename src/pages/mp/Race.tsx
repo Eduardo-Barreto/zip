@@ -60,7 +60,12 @@ export function RaceView({
       <div className="decorative-grid decorative-grid--masked" aria-hidden="true" />
       <div className="glow" aria-hidden="true" />
 
-      <header className="flex items-center justify-between">
+      <header
+        className="flex items-center justify-between"
+        data-testid="race-header"
+        data-seed={puzzle.meta.seed}
+        data-difficulty={puzzle.meta.gameNumber}
+      >
         <span className="font-[var(--font-mono)] text-[13px] uppercase tracking-widest text-[var(--color-accent)]">
           1v1 · {side === 'host' ? 'anfitrião' : 'convidado'}
         </span>
@@ -76,7 +81,14 @@ export function RaceView({
       </div>
 
       <div className="relative flex flex-1 items-center justify-center py-4">
-        <div ref={boardRef} onPointerDownCapture={handlePointerDownCapture} className="contents">
+        {/* key by seed: a rematch delivers a new seed so the Board remounts
+            cleanly with a fresh draw state (rerender-lazy-state-init). */}
+        <div
+          key={puzzle.meta.seed}
+          ref={boardRef}
+          onPointerDownCapture={handlePointerDownCapture}
+          className="contents"
+        >
           <Board puzzle={puzzle} onSolved={handleSolved} />
         </div>
       </div>

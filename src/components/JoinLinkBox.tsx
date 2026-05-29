@@ -13,7 +13,10 @@ type Props = {
 export function JoinLinkBox({ roomCode }: Props) {
   const [copied, setCopied] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
-  const url = `${window.location.origin}/#/mp/join/${roomCode}`
+  // Include the deploy base path (import.meta.env.BASE_URL is '/zip/' on the
+  // GitHub Pages build, '/' in dev) — otherwise the link drops to the origin
+  // root and 404s on a project Pages site. BASE_URL always ends with '/'.
+  const url = `${window.location.origin}${import.meta.env.BASE_URL}#/mp/join/${roomCode}`
 
   useEffect(() => {
     let cancelled = false

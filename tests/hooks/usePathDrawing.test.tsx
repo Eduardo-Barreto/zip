@@ -16,7 +16,7 @@ function makePuzzle(walls: string[] = []): Puzzle {
     ]),
     walls: new Set(walls),
     solution: [0, 1, 3, 2],
-    meta: { gameNumber: 0, unique: false, difficultyScore: 0 },
+    meta: { gameNumber: 0, seed: 0, unique: false, difficultyScore: 0 },
   }
 }
 
@@ -76,7 +76,7 @@ describe('checkpoint order enforcement (blocks 1 -> 9 skips)', () => {
       ]),
       walls: new Set<string>(),
       solution: [0, 2, 3, 1],
-      meta: { gameNumber: 0, unique: false, difficultyScore: 0 },
+      meta: { gameNumber: 0, seed: 0, unique: false, difficultyScore: 0 },
     }
   }
 

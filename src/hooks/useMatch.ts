@@ -7,6 +7,7 @@ import {
   type GuestMatch,
   type HostMatch,
   type MatchResult,
+  type MatchSetup,
 } from './matchController'
 
 // Thin React wrapper over the transport-free match controllers. The
@@ -16,7 +17,7 @@ import {
 // hook only owns the React lifecycle: it spins up the right controller for the
 // role, mirrors its events into render state, and tears it down on unmount.
 
-export type { MatchResult } from './matchController'
+export type { MatchResult, MatchSetup } from './matchController'
 export { PROGRESS_THROTTLE_MS } from './throttle'
 
 export type MatchPhase = 'connecting' | 'waiting' | 'racing' | 'done'
@@ -24,7 +25,7 @@ export type MatchPhase = 'connecting' | 'waiting' | 'racing' | 'done'
 export type MatchState = {
   phase: MatchPhase
   role: 'host' | 'guest'
-  gameNumber: number | null
+  setup: MatchSetup | null
   oppFilled: number
   oppTotal: number
   result: MatchResult | null
@@ -33,7 +34,8 @@ export type MatchState = {
 
 type MatchAction =
   | { kind: 'connected' }
-  | { kind: 'setup'; gameNumber: number }
+  | { kind: 'setup'; setup: MatchSetup }
+  | { kind: 'rematch_setup'; setup: MatchSetup }
   | { kind: 'opp_progress'; filled: number; total: number }
   | { kind: 'result'; result: MatchResult }
   | { kind: 'error'; message: string }
@@ -43,7 +45,17 @@ function reducer(state: MatchState, action: MatchAction): MatchState {
     case 'connected':
       return state.phase === 'connecting' ? { ...state, phase: 'waiting' } : state
     case 'setup':
-      return { ...state, phase: 'racing', gameNumber: action.gameNumber }
+      return { ...state, phase: 'racing', setup: action.setup }
+    case 'rematch_setup':
+      // Reset race state but stay in racing phase with the new setup.
+      return {
+        ...state,
+        phase: 'racing',
+        setup: action.setup,
+        oppFilled: 0,
+        oppTotal: 0,
+        result: null,
+      }
     case 'opp_progress':
       if (state.phase === 'done') return state
       return { ...state, oppFilled: action.filled, oppTotal: action.total }
@@ -59,7 +71,8 @@ type HostOptions = {
   role: 'host'
   roomCode: string
   transport: TransportFactory
-  gameNumber: number
+  seed: number
+  difficulty: number
   now?: () => number
 }
 
@@ -77,13 +90,16 @@ export type UseMatch = {
   state: MatchState
   reportProgress: (filled: number, total: number) => void
   reportSolved: (timeMs: number) => void
+  /** Host: broadcast a new rematch_setup with the given seed (same difficulty).
+   *  Guest: send a `rematch` request to the host. */
+  triggerRematch: (newSeed?: number) => void
 }
 
-function initialState(role: 'host' | 'guest', gameNumber: number | null): MatchState {
+function initialState(role: 'host' | 'guest', setup: MatchSetup | null): MatchState {
   return {
     phase: 'connecting',
     role,
-    gameNumber,
+    setup,
     oppFilled: 0,
     oppTotal: 0,
     result: null,
@@ -92,9 +108,10 @@ function initialState(role: 'host' | 'guest', gameNumber: number | null): MatchS
 }
 
 export function useMatch(options: UseMatchOptions): UseMatch {
-  const initialGame = options.role === 'host' ? options.gameNumber : null
+  const initialSetup: MatchSetup | null =
+    options.role === 'host' ? { seed: options.seed, difficulty: options.difficulty } : null
   const [state, dispatch] = useReducer(reducer, undefined, () =>
-    initialState(options.role, initialGame),
+    initialState(options.role, initialSetup),
   )
 
   const controllerRef = useRef<HostMatch | GuestMatch | null>(null)
@@ -107,9 +124,8 @@ export function useMatch(options: UseMatchOptions): UseMatch {
 
   // Keep the latest options reachable without re-running the connect effect.
   // The connection identity (role/roomCode/transport) IS in the dep list so a
-  // change reconnects; the per-role payload (gameNumber/guestLocalId/now) is
-  // read off this ref at connect time so changing it does not thrash the socket
-  // (Host bumps gameNumber via a key remount, which re-runs this effect anyway).
+  // change reconnects; per-role payload (seed/difficulty/guestLocalId/now) is
+  // read off this ref at connect time so it doesn't thrash the socket.
   const optionsRef = useRef(options)
   optionsRef.current = options
 
@@ -127,8 +143,6 @@ export function useMatch(options: UseMatchOptions): UseMatch {
     if (closeTimerRef.current !== null) {
       clearTimeout(closeTimerRef.current)
       closeTimerRef.current = null
-      // The remount adopts the controller (or its still-pending promise) from
-      // the first mount instead of opening a second connection.
       if (pendingRef.current !== null) return
     }
 
@@ -137,7 +151,8 @@ export function useMatch(options: UseMatchOptions): UseMatch {
     const events = {
       onConnected: () => alive() && dispatch({ kind: 'connected' }),
       onGuestConnect: () => alive() && dispatch({ kind: 'connected' }),
-      onSetup: (gameNumber: number) => alive() && dispatch({ kind: 'setup', gameNumber }),
+      onSetup: (setup: MatchSetup) => alive() && dispatch({ kind: 'setup', setup }),
+      onRematchSetup: (setup: MatchSetup) => alive() && dispatch({ kind: 'rematch_setup', setup }),
       onOppProgress: (filled: number, total: number) =>
         alive() && dispatch({ kind: 'opp_progress', filled, total }),
       onResult: (result: MatchResult) => alive() && dispatch({ kind: 'result', result }),
@@ -149,7 +164,7 @@ export function useMatch(options: UseMatchOptions): UseMatch {
         ? createHostMatch(
             transport,
             roomCode,
-            opts.gameNumber,
+            { seed: opts.seed, difficulty: opts.difficulty },
             events,
             opts.now ?? (() => performance.now()),
           )
@@ -172,7 +187,6 @@ export function useMatch(options: UseMatchOptions): UseMatch {
 
     return () => {
       // Defer the teardown so a StrictMode remount can reclaim the connection.
-      // aliveRef stays true here; it only flips false if the close actually runs.
       closeTimerRef.current = setTimeout(() => {
         closeTimerRef.current = null
         aliveRef.current = false
@@ -188,5 +202,17 @@ export function useMatch(options: UseMatchOptions): UseMatch {
     state,
     reportProgress: (filled, total) => controllerRef.current?.reportProgress(filled, total),
     reportSolved: (timeMs) => controllerRef.current?.reportSolved(timeMs),
+    triggerRematch: (newSeed) => {
+      const ctrl = controllerRef.current
+      if (!ctrl) return
+      if ('startRematch' in ctrl) {
+        // host controller
+        const seed = newSeed ?? Math.floor(Math.random() * 0x7fffffff)
+        ctrl.startRematch(seed)
+      } else {
+        // guest controller
+        ctrl.requestRematch()
+      }
+    },
   }
 }

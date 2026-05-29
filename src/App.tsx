@@ -36,6 +36,14 @@ export function App() {
         }
       />
       <Route
+        path="/mp/join"
+        element={
+          <Suspense fallback={<Loading />}>
+            <Join />
+          </Suspense>
+        }
+      />
+      <Route
         path="/mp/join/:roomCode"
         element={
           <Suspense fallback={<Loading />}>
