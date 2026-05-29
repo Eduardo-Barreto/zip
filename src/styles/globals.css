@@ -35,8 +35,8 @@
     font-size: 16px; /* body >= 14px (anti-slop) */
     -webkit-font-smoothing: antialiased;
     /* honour the notch on mobile */
-    padding: env(safe-area-inset-top) env(safe-area-inset-right)
-      env(safe-area-inset-bottom) env(safe-area-inset-left);
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+      env(safe-area-inset-left);
     min-height: 100dvh;
   }
   h1,

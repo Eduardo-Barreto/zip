@@ -4,8 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "portless run vite",
     "dev:peer": "peerjs --port 9000 --path /pj --allow_discovery",
+    "dev:lan": "concurrently -k -n peer,vite -c blue,green \"bun run dev:peer\" \"VITE_PEER_HOST=$(hostname -I | awk '{print $1}') VITE_PEER_PORT=9000 VITE_PEER_PATH=/pj vite --host\"",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest",

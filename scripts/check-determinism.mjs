@@ -54,7 +54,7 @@ for (const file of walk(GAME_DIR)) {
 
 if (violations.length > 0) {
   console.error('Determinism guard FAILED — non-deterministic source in src/game/**:')
-  for (const v of violations) console.error('  ' + v)
+  for (const v of violations) console.error(`  ${v}`)
   console.error('\nThe puzzle core must be reproducible from seed=gameNumber.')
   console.error('Use the injected mulberry32 prng instead. (AC26)')
   process.exit(1)
