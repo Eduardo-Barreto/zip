@@ -4,15 +4,15 @@ import { wallKey } from '../../src/game/grid'
 import type { Cell, Puzzle } from '../../src/game/types'
 import { pathReducer, usePathDrawing } from '../../src/hooks/usePathDrawing'
 
-// Tiny hand-built 2x2 board (same shape as validate.test): cells
-// 0=(0,0) 1=(0,1) 2=(1,0) 3=(1,1). Numbers: 1@0, 2@3. Solution 0->1->3->2.
+// 2x2 board: cells 0=(0,0) 1=(0,1) 2=(1,0) 3=(1,1). Numbers 1@0, max 2@2 — the
+// solution 0->1->3->2 ends on the max number.
 function makePuzzle(walls: string[] = []): Puzzle {
   return {
     rows: 2,
     cols: 2,
     numbers: new Map<Cell, number>([
       [0, 1],
-      [3, 2],
+      [2, 2],
     ]),
     walls: new Set(walls),
     solution: [0, 1, 3, 2],
@@ -34,7 +34,6 @@ describe('pathReducer (DOM-free)', () => {
 
   it('rejects a non-adjacent (diagonal) extend', () => {
     const p = makePuzzle()
-    // 0=(0,0) to 3=(1,1) is diagonal.
     expect(pathReducer(p, { path: [0] }, { type: 'extendTo', cell: 3 })).toEqual({ path: [0] })
   })
 
@@ -45,7 +44,6 @@ describe('pathReducer (DOM-free)', () => {
 
   it('rejects an extend onto an already-visited cell', () => {
     const p = makePuzzle()
-    // head=3, prev=1; revisiting 0 (not the second-to-last) is rejected.
     expect(pathReducer(p, { path: [0, 1, 3] }, { type: 'extendTo', cell: 0 })).toEqual({
       path: [0, 1, 3],
     })
@@ -61,6 +59,36 @@ describe('pathReducer (DOM-free)', () => {
   it('reset clears the path', () => {
     const p = makePuzzle()
     expect(pathReducer(p, { path: [0, 1] }, { type: 'reset' })).toEqual({ path: [] })
+  })
+})
+
+describe('checkpoint order enforcement (blocks 1 -> 9 skips)', () => {
+  // 2x2, numbers 1@0, 2@2, max 3@1. From the start you may step onto 2 (next in
+  // order) but NOT onto 3 (out of order).
+  function orderPuzzle(): Puzzle {
+    return {
+      rows: 2,
+      cols: 2,
+      numbers: new Map<Cell, number>([
+        [0, 1],
+        [2, 2],
+        [1, 3],
+      ]),
+      walls: new Set<string>(),
+      solution: [0, 2, 3, 1],
+      meta: { gameNumber: 0, unique: false, difficultyScore: 0 },
+    }
+  }
+
+  it('rejects stepping onto a numbered cell out of order', () => {
+    const p = orderPuzzle()
+    // cell 1 carries order 3; from [0] the next expected is 2, so it is blocked.
+    expect(pathReducer(p, { path: [0] }, { type: 'extendTo', cell: 1 })).toEqual({ path: [0] })
+  })
+
+  it('allows stepping onto the next number in order', () => {
+    const p = orderPuzzle()
+    expect(pathReducer(p, { path: [0] }, { type: 'extendTo', cell: 2 })).toEqual({ path: [0, 2] })
   })
 })
 

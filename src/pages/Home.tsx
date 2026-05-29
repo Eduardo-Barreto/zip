@@ -1,34 +1,28 @@
 import { useCallback, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { exportSave, importSave, load, save } from '../game/progress'
+import { Link } from 'react-router-dom'
+import { formatShare, load } from '../game/progress'
 import { useProgress } from '../hooks/useProgress'
 
-// Entry screen. Mobile-first, board-is-hero spirit even on the menu: one teal
-// primary action (Continue), quiet secondary links, and a tucked-away save
-// transfer panel. No shadow-on-everything; body text stays >= 14px.
-
-type Panel = 'none' | 'export' | 'import'
+// Entry screen. Mobile-first, board-is-hero spirit even on the menu: one accent
+// primary action (Continue), quiet secondary links, and a Share action that
+// copies a plain-text summary of cleared levels + best times to the clipboard.
 
 export default function Home() {
-  const navigate = useNavigate()
   const { currentGame } = useProgress()
-  const [panel, setPanel] = useState<Panel>('none')
-  const [code, setCode] = useState('')
-  const [importValue, setImportValue] = useState('')
-  const [imported, setImported] = useState(false)
+  const [shared, setShared] = useState(false)
 
-  const handleExport = useCallback(() => {
-    setCode(exportSave(load()))
-    setPanel('export')
+  const handleShare = useCallback(async () => {
+    const text = formatShare(load())
+    try {
+      await navigator.clipboard.writeText(text)
+      setShared(true)
+      setTimeout(() => setShared(false), 2000)
+    } catch {
+      // clipboard blocked (insecure context / permissions): surface the text so
+      // the player can copy it manually.
+      window.prompt('Copie seu progresso:', text)
+    }
   }, [])
-
-  const handleImport = useCallback(() => {
-    const restored = importSave(importValue)
-    save(restored)
-    setImported(true)
-    // A reload re-seeds every screen from the freshly imported progress.
-    navigate(`/play/${restored.currentGame}`)
-  }, [importValue, navigate])
 
   return (
     <main className="fade-in mx-auto flex min-h-[100dvh] max-w-md flex-col justify-center gap-8 px-6 py-10">
@@ -68,75 +62,24 @@ export default function Home() {
       </div>
 
       <div
-        className="flex flex-col gap-3 border-t pt-6"
+        className="flex flex-col items-center gap-2 border-t pt-6"
         style={{ borderColor: 'var(--color-border)' }}
       >
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={handleExport}
-            className="card-lift flex-1 rounded-lg px-4 py-2 text-[14px] text-[var(--color-text-muted)] active:scale-95"
-            style={{
-              backgroundColor: 'var(--color-bg-card)',
-              border: '1px solid rgba(255, 255, 255, 0.06)',
-            }}
-          >
-            Exportar
-          </button>
-          <button
-            type="button"
-            onClick={() => setPanel('import')}
-            className="card-lift flex-1 rounded-lg px-4 py-2 text-[14px] text-[var(--color-text-muted)] active:scale-95"
-            style={{
-              backgroundColor: 'var(--color-bg-card)',
-              border: '1px solid rgba(255, 255, 255, 0.06)',
-            }}
-          >
-            Importar
-          </button>
-        </div>
-
-        {panel === 'export' ? (
-          <textarea
-            readOnly
-            value={code}
-            aria-label="Código de exportação"
-            className="w-full rounded-lg bg-[var(--color-bg-card)] p-3 font-[var(--font-mono)] text-[13px] text-[var(--color-text)]"
-            style={{ border: '1px solid rgba(255, 255, 255, 0.06)' }}
-            rows={3}
-            onFocus={(e) => e.currentTarget.select()}
-          />
-        ) : null}
-
-        {panel === 'import' ? (
-          <div className="flex flex-col gap-2">
-            <textarea
-              value={importValue}
-              onChange={(e) => setImportValue(e.target.value)}
-              aria-label="Código de importação"
-              placeholder="Cole seu código de progresso"
-              className="w-full rounded-lg bg-[var(--color-bg-card)] p-3 font-[var(--font-mono)] text-[13px] text-[var(--color-text)]"
-              style={{ border: '1px solid rgba(255, 255, 255, 0.06)' }}
-              rows={3}
-            />
-            <button
-              type="button"
-              onClick={handleImport}
-              className="card-lift rounded-lg px-4 py-2 font-[var(--font-mono)] text-[14px] font-bold text-[var(--color-accent)] active:scale-95"
-              style={{
-                backgroundColor:
-                  'color-mix(in srgb, var(--color-accent) 10%, var(--color-bg-card))',
-                border: '1px solid color-mix(in srgb, var(--color-accent) 40%, transparent)',
-              }}
-            >
-              Restaurar progresso
-            </button>
-            {imported ? (
-              <span className="text-[13px] text-[var(--color-text-muted)]" role="status">
-                Progresso restaurado.
-              </span>
-            ) : null}
-          </div>
+        <button
+          type="button"
+          onClick={handleShare}
+          className="card-lift w-full rounded-lg px-4 py-2 text-[14px] text-[var(--color-text-muted)] active:scale-95"
+          style={{
+            backgroundColor: 'var(--color-bg-card)',
+            border: '1px solid rgba(255, 255, 255, 0.06)',
+          }}
+        >
+          Compartilhar score
+        </button>
+        {shared ? (
+          <span className="text-[13px] text-[var(--color-accent)]" role="status">
+            Copiado para a área de transferência.
+          </span>
         ) : null}
       </div>
     </main>

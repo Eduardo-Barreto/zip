@@ -1,10 +1,10 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 // A wall-clock stopwatch for the play screen. This lives in src/hooks (NOT
 // src/game), so the determinism guard — which only scans src/game/** — does not
-// apply and we may read performance.now() directly. Elapsed time is committed
-// to state only when the caller samples it (stop / read), keeping the running
-// tick out of React's render path.
+// apply and we may read performance.now() directly. While running it ticks the
+// displayed elapsedMs a few times a second (so the user sees it count); the
+// precise final time is sampled exactly at stop() for scoring.
 
 export type UseTimer = {
   /** Milliseconds elapsed across all running spans since the last reset. */
@@ -54,6 +54,14 @@ export function useTimer(): UseTimer {
     setRunning(false)
     setElapsedMs(0)
   }, [])
+
+  // While running, tick the displayed value ~4x/sec. The interval drives a
+  // cheap setState; the authoritative time is still sampled at stop().
+  useEffect(() => {
+    if (!running) return
+    const id = setInterval(() => setElapsedMs(sample()), 250)
+    return () => clearInterval(id)
+  }, [running, sample])
 
   return { elapsedMs, running, start, stop, reset }
 }

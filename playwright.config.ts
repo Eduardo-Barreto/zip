@@ -19,7 +19,10 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `VITE_TRANSPORT=broadcast bun run dev --port ${PORT} --strictPort`,
+    // Plain vite (not the portless `dev` script) for the test harness: avoids
+    // the portless host-registration collision. `bun run dev` (portless) stays
+    // the dev workflow; e2e just needs a server on a fixed port.
+    command: `VITE_TRANSPORT=broadcast bunx vite --port ${PORT} --strictPort`,
     url: `http://localhost:${PORT}`,
     reuseExistingServer: !process.env.CI,
     timeout: 30_000,

@@ -1,4 +1,4 @@
-import { startTransition, useCallback, useRef, useState } from 'react'
+import { startTransition, useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Board } from '../components/Board'
 import { HintButton } from '../components/HintButton'
@@ -46,10 +46,13 @@ export default function Play() {
   const hintsRef = useRef(0)
   const [win, setWin] = useState<WinState | null>(null)
 
-  // Start the clock on the first interaction with the board.
-  const handlePointerDownCapture = useCallback(() => {
+  // Start the clock as soon as the puzzle loads (thinking time counts too), and
+  // restart it whenever the level changes.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on puzzle, not timer identity
+  useEffect(() => {
+    timer.reset()
     timer.start()
-  }, [timer])
+  }, [puzzle])
 
   const handleHintUsed = useCallback(() => {
     hintsRef.current += 1
@@ -81,7 +84,7 @@ export default function Play() {
   const total = puzzle.rows * puzzle.cols
 
   return (
-    <main className="fade-in mx-auto flex min-h-[100dvh] max-w-md flex-col gap-5 px-5 py-6">
+    <main className="fade-in mx-auto flex h-[100dvh] max-w-md flex-col gap-3 overflow-hidden px-4 py-3">
       <div className="decorative-grid decorative-grid--masked" aria-hidden="true" />
       <div className="glow" aria-hidden="true" />
       <header className="flex items-center justify-between">
@@ -100,9 +103,9 @@ export default function Play() {
 
       <ProgressBar filled={filled} total={total} />
 
-      <div className="relative flex flex-1 items-center justify-center py-4">
-        <div ref={boardRef} onPointerDownCapture={handlePointerDownCapture} className="contents">
-          <Board puzzle={puzzle} onSolved={handleSolved} />
+      <div className="relative flex min-h-0 flex-1 items-center justify-center">
+        <div ref={boardRef} className="contents">
+          <Board key={puzzle.meta.gameNumber} puzzle={puzzle} onSolved={handleSolved} />
         </div>
         {win !== null ? (
           <WinOverlay

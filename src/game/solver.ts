@@ -18,6 +18,8 @@ type SolverCtx = {
   neighbors: Cell[][]
   numbers: Map<Cell, number>
   totalNumbers: number
+  /** the cell carrying the max order; a solution MUST end here. */
+  maxCell: Cell | undefined
   walls: Puzzle['walls']
   budget: number
 }
@@ -27,16 +29,28 @@ function makeCtx(puzzle: Puzzle, budget: number): SolverCtx {
   const area = rows * cols
   const neighbors: Cell[][] = new Array(area)
   for (let cell = 0; cell < area; cell++) neighbors[cell] = orthoNeighbors(cell, rows, cols)
+  const total = puzzle.numbers.size
+  let maxCell: Cell | undefined
+  for (const [cell, order] of puzzle.numbers) {
+    if (order === total) maxCell = cell
+  }
   return {
     rows,
     cols,
     area,
     neighbors,
     numbers: puzzle.numbers,
-    totalNumbers: puzzle.numbers.size,
+    totalNumbers: total,
+    maxCell,
     walls: puzzle.walls,
     budget,
   }
+}
+
+/** A completed path counts as a solution only if it ends on the max number. */
+function isWin(ctx: SolverCtx, cell: Cell, nextExpected: number): boolean {
+  if (nextExpected !== ctx.totalNumbers + 1) return false
+  return ctx.maxCell === undefined || cell === ctx.maxCell
 }
 
 function startCell(puzzle: Puzzle): Cell | null {
@@ -66,7 +80,7 @@ export function countSolutions(puzzle: Puzzle, cap = 2, budget = SOLVER_NODE_BUD
       return
     }
     if (depth === ctx.area) {
-      if (nextExpected === ctx.totalNumbers + 1) count++
+      if (isWin(ctx, cell, nextExpected)) count++
       return
     }
     const nbrs = ctx.neighbors[cell] ?? []
@@ -140,7 +154,7 @@ export function hint(puzzle: Puzzle, prefix: readonly Cell[], budget = SOLVER_NO
       exceeded = true
       return false
     }
-    if (depth === ctx.area) return expected === ctx.totalNumbers + 1
+    if (depth === ctx.area) return isWin(ctx, cell, expected)
     const nbrs = ctx.neighbors[cell] ?? []
     for (const nb of nbrs) {
       if (visited[nb]) continue

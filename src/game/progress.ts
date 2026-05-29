@@ -108,20 +108,42 @@ export function recordCompletion(
   }
 }
 
-// --- export / import (base64, unicode-safe) -----------------------------------
+// --- share (score + per-level best times) -------------------------------------
 
-export function exportSave(progress: Progress): string {
-  const json = JSON.stringify(progress)
-  return btoa(encodeURIComponent(json))
+function fmtTime(ms: number): string {
+  const total = Math.floor(ms / 1000)
+  const m = Math.floor(total / 60)
+  const s = total % 60
+  return `${m}:${s.toString().padStart(2, '0')}`
 }
 
-export function importSave(code: string): Progress {
-  try {
-    const json = decodeURIComponent(atob(code.trim()))
-    return normalize(JSON.parse(json))
-  } catch {
-    return freshProgress()
+const STARS = ['', '★', '★★', '★★★'] as const
+
+/**
+ * A shareable summary of progress — what actually makes sense to share: the
+ * levels cleared and the best time (+ stars) for each. Plain text, clipboard-
+ * and chat-friendly.
+ */
+export function formatShare(progress: Progress): string {
+  const entries = Object.entries(progress.completed)
+    .map(([n, e]) => ({ n: Number(n), ...e }))
+    .filter((e) => Number.isInteger(e.n))
+    .sort((a, b) => a.n - b.n)
+
+  const totalStars = entries.reduce((sum, e) => sum + e.stars, 0)
+  const lines = [
+    'Zip 🟦',
+    `Nível ${progress.currentGame} · sequência ${progress.streak}🔥 · ${totalStars}★`,
+  ]
+  if (entries.length > 0) {
+    lines.push('')
+    for (const e of entries) {
+      const code = `#${String(e.n).padStart(3, '0')}`
+      const stars = STARS[Math.max(0, Math.min(3, e.stars))]
+      lines.push(`${code}  ${fmtTime(e.bestTimeMs)}  ${stars}`)
+    }
   }
+  return lines.join('\n')
 }
 
 // --- guards -------------------------------------------------------------------

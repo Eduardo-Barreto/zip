@@ -25,6 +25,15 @@ function startCell(puzzle: Puzzle): Cell | undefined {
   return undefined
 }
 
+/** How many checkpoints the path has reached in ascending order (1,2,…). */
+function reachedInOrder(puzzle: Puzzle, path: readonly Cell[]): number {
+  let count = 0
+  for (const cell of path) {
+    if (puzzle.numbers.get(cell) === count + 1) count++
+  }
+  return count
+}
+
 export function pathReducer(puzzle: Puzzle, state: PathState, action: PathAction): PathState {
   switch (action.type) {
     case 'start': {
@@ -51,6 +60,12 @@ export function pathReducer(puzzle: Puzzle, state: PathState, action: PathAction
       if (!areAdjacent(head, action.cell, puzzle.cols)) return state
       if (hasWall(puzzle.walls, head, action.cell)) return state
       if (path.includes(action.cell)) return state
+
+      // Enforce checkpoint ORDER: you may only step onto a numbered cell when
+      // it is the next number in sequence. This blocks jumping 1 -> 9.
+      const order = puzzle.numbers.get(action.cell)
+      if (order !== undefined && order !== reachedInOrder(puzzle, path) + 1) return state
+
       return { path: [...path, action.cell] }
     }
     case 'reset':

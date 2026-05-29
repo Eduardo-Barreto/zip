@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   CURRENT_VERSION,
-  exportSave,
+  formatShare,
   freshProgress,
-  importSave,
   load,
   recordCompletion,
   STORAGE_KEY,
@@ -45,13 +44,17 @@ describe('migration with a real legacy fixture (AC17)', () => {
     expect(migrated.streak).toBe(4)
   })
 
-  it('round-trips export/import identically', () => {
+  it('formats a shareable score summary with per-level best times', () => {
     let p = freshProgress()
     p = recordCompletion(p, 1, { stars: 3, timeMs: 4200, hintsUsed: 0 })
-    p = recordCompletion(p, 2, { stars: 2, timeMs: 8000, hintsUsed: 1 })
-    const restored = importSave(exportSave(p))
-    expect(restored.currentGame).toBe(p.currentGame)
-    expect(restored.completed).toEqual(p.completed)
+    p = recordCompletion(p, 2, { stars: 2, timeMs: 65_000, hintsUsed: 1 })
+    const text = formatShare(p)
+    expect(text).toContain('Zip')
+    expect(text).toContain('#001')
+    expect(text).toContain('0:04') // 4200ms
+    expect(text).toContain('#002')
+    expect(text).toContain('1:05') // 65000ms
+    expect(text).toContain('★★★')
   })
 })
 

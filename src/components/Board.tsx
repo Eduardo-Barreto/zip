@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import type { Cell as CellIndex, Puzzle } from '../game/types'
 import { usePathDrawing } from '../hooks/usePathDrawing'
 import { Cell } from './Cell'
+import { NumberLayer } from './NumberLayer'
 import { PathLine } from './PathLine'
 import { WallEdges } from './WallEdges'
 
@@ -113,57 +114,56 @@ export function Board({ puzzle, onSolved }: BoardProps) {
 
   const cells: React.ReactElement[] = []
   for (let i = 0; i < rows * cols; i++) {
-    const order = puzzle.numbers.get(i)
-    cells.push(
-      <Cell
-        key={i}
-        index={i}
-        order={order}
-        onPath={onPath.has(i)}
-        reached={order !== undefined && order <= reachedThrough}
-      />,
-    )
+    cells.push(<Cell key={i} index={i} onPath={onPath.has(i)} />)
   }
 
   return (
-    <div
-      ref={boardRef}
-      data-testid="board"
-      data-solved={solved ? 'true' : 'false'}
-      className="board-surface relative touch-none"
-      style={{
-        width: 'min(92vw, 92vmin, 560px)',
-        height: 'min(92vw, 92vmin, 560px)',
-        aspectRatio: `${cols} / ${rows}`,
-      }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-    >
+    <div className="flex w-full flex-col items-center gap-3">
       <div
-        className="grid h-full w-full gap-[2px]"
-        style={{
-          gridTemplateColumns: `repeat(${cols}, minmax(40px, 1fr))`,
-          gridTemplateRows: `repeat(${rows}, minmax(40px, 1fr))`,
-        }}
+        ref={boardRef}
+        data-testid="board"
+        data-solved={solved ? 'true' : 'false'}
+        className="board-surface relative w-full touch-none"
+        // Square board that fits ANY screen: full container width, capped so its
+        // (equal) height never exceeds the available viewport height. Works on
+        // mobile and desktop without cropping.
+        style={{ maxWidth: 'min(54vh, 520px)', aspectRatio: '1' }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
       >
-        {cells}
+        <div
+          className="grid h-full w-full gap-[2px]"
+          style={{
+            gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+            gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
+          }}
+        >
+          {cells}
+        </div>
+        <svg
+          className="pointer-events-none absolute inset-0 h-full w-full"
+          viewBox={`0 0 ${viewW} ${viewH}`}
+          preserveAspectRatio="none"
+          aria-hidden="true"
+          role="presentation"
+        >
+          <WallEdges walls={puzzle.walls} cols={cols} pitch={SVG_PITCH} half={SVG_HALF} />
+          <PathLine path={path} cols={cols} pitch={SVG_PITCH} half={SVG_HALF} complete={solved} />
+          <NumberLayer
+            numbers={puzzle.numbers}
+            reachedThrough={reachedThrough}
+            cols={cols}
+            pitch={SVG_PITCH}
+            half={SVG_HALF}
+          />
+        </svg>
       </div>
-      <svg
-        className="pointer-events-none absolute inset-0 h-full w-full"
-        viewBox={`0 0 ${viewW} ${viewH}`}
-        preserveAspectRatio="none"
-        aria-hidden="true"
-        role="presentation"
-      >
-        <WallEdges walls={puzzle.walls} cols={cols} pitch={SVG_PITCH} half={SVG_HALF} />
-        <PathLine path={path} cols={cols} pitch={SVG_PITCH} half={SVG_HALF} complete={solved} />
-      </svg>
       <button
         type="button"
         onClick={reset}
-        className="card-lift absolute -bottom-12 left-1/2 -translate-x-1/2 rounded-lg px-4 py-2 text-[15px] text-[var(--color-text-muted)] active:scale-95"
+        className="card-lift rounded-lg px-4 py-2 text-[15px] text-[var(--color-text-muted)] active:scale-95"
         style={{
           backgroundColor: 'var(--color-bg-card)',
           border: '1px solid rgba(255, 255, 255, 0.06)',

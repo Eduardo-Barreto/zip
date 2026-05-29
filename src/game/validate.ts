@@ -7,6 +7,8 @@ export type ValidateReason =
   | 'not-adjacent' // a jump between non-orthogonal cells
   | 'crosses-wall' // a step crosses a wall
   | 'number-order' // numbered cells not visited 1,2,3,…,K in order
+  | 'end-not-on-max' // all cells filled & numbers in order, but the path does
+// not END on the highest number (the win must finish on the last checkpoint)
 
 export type ValidateResult = {
   complete: boolean
@@ -48,7 +50,24 @@ export function validatePath(puzzle: Puzzle, path: readonly Cell[]): ValidateRes
   if (expected !== puzzle.numbers.size + 1) {
     return { complete: true, valid: false, reason: 'number-order' }
   }
+  // The path must FINISH on the highest checkpoint: filling every cell in order
+  // is not a win unless the last cell drawn is the max number (the generator
+  // places it at the path end, so a real solution always can).
+  const maxCell = maxOrderCell(puzzle)
+  if (maxCell !== undefined && path[path.length - 1] !== maxCell) {
+    return { complete: true, valid: false, reason: 'end-not-on-max' }
+  }
   return { complete: true, valid: true }
+}
+
+/** The cell carrying the highest checkpoint order (order === numbers.size). */
+export function maxOrderCell(puzzle: Puzzle): Cell | undefined {
+  const max = puzzle.numbers.size
+  if (max === 0) return undefined
+  for (const [cell, order] of puzzle.numbers) {
+    if (order === max) return cell
+  }
+  return undefined
 }
 
 function fail(reason: ValidateReason): ValidateResult {

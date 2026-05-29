@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { generatePuzzle } from '../../src/game/generate'
-import { wallKey } from '../../src/game/grid'
 import { countSolutions, hint } from '../../src/game/solver'
 import type { Cell, Puzzle } from '../../src/game/types'
 
@@ -9,17 +8,19 @@ function startCellOf(p: Puzzle): Cell {
   throw new Error('no start')
 }
 
-// 2x2, numbers 1@0 2@3 — has two solutions (0-1-3-2 and 0-2-3-1).
-function twoSolutionPuzzle(walls: string[] = []): Puzzle {
+// 3x3 board, cols=3:  0 1 2 / 3 4 5 / 6 7 8.  Numbers: 1@0, max 2@8 (a corner
+// the path can END on). Two Hamiltonian paths from 0 to 8 cover the board, so
+// it has multiple solutions under the "end on the max number" rule.
+function twoSolutionPuzzle(): Puzzle {
   return {
-    rows: 2,
-    cols: 2,
+    rows: 3,
+    cols: 3,
     numbers: new Map<Cell, number>([
       [0, 1],
-      [3, 2],
+      [8, 2],
     ]),
-    walls: new Set(walls),
-    solution: [0, 1, 3, 2],
+    walls: new Set<string>(),
+    solution: [0, 1, 2, 5, 4, 3, 6, 7, 8],
     meta: { gameNumber: 0, unique: false, difficultyScore: 0 },
   }
 }
@@ -55,18 +56,17 @@ describe('hint (AC8 / AC8b / AC8c)', () => {
   })
 
   it('AC8: backtracks a proven dead-end prefix', () => {
-    // wall between 2 and 3 makes the board unsolvable; from [0] there is no
-    // completion, so hint must say backtrack (search exhausted, not exceeded).
-    const puzzle = twoSolutionPuzzle([wallKey(2, 3)])
-    expect(hint(puzzle, [0]).kind).toBe('backtrack')
+    // Reaching the max number 8 early (before covering 3,4,6,7) is a dead end:
+    // a win must FINISH on 8, which is now used up — no completion exists.
+    const puzzle = twoSolutionPuzzle()
+    expect(hint(puzzle, [0, 1, 2, 5, 8]).kind).toBe('backtrack')
   })
 
   it('AC8b: respects a legal but divergent prefix that still completes', () => {
-    // canonical solution is 0-1-3-2; player diverged to [0,2] which still
-    // completes via 0-2-3-1. hint must extend the REAL prefix, not force back.
+    // Player diverged to [0,3]; it still completes via 0-3-6-7-4-1-2-5-8.
     const puzzle = twoSolutionPuzzle()
-    const h = hint(puzzle, [0, 2])
-    expect(h).toEqual({ kind: 'extend', cell: 3 })
+    const h = hint(puzzle, [0, 3])
+    expect(h).toEqual({ kind: 'extend', cell: 6 })
   })
 
   it('AC8c: returns unknown when the hint search exceeds the budget, under 1s', () => {
