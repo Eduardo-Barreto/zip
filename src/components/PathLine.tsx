@@ -31,6 +31,8 @@ function PathLineImpl({ path, cols, pitch, half, complete }: PathLineProps) {
 
   return (
     <g>
+      {/* Soft electric-blue underglow beneath the stroke (anti-slop: one
+          intentional accent, no global drop-shadow). */}
       <path
         d={d}
         fill="none"
@@ -39,8 +41,21 @@ function PathLineImpl({ path, cols, pitch, half, complete }: PathLineProps) {
         strokeLinecap="round"
         strokeLinejoin="round"
         style={{
-          opacity: complete ? 1 : 0.92,
-          transition: 'opacity 180ms ease-out',
+          opacity: complete ? 0.45 : 0.32,
+          filter: `blur(${Math.round(pitch * 0.06)}px)`,
+          transition: 'opacity 180ms cubic-bezier(0.23, 1, 0.32, 1)',
+        }}
+      />
+      <path
+        d={d}
+        fill="none"
+        stroke="var(--color-accent)"
+        strokeWidth={Math.round(pitch * 0.34)}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{
+          opacity: complete ? 1 : 0.95,
+          transition: 'opacity 180ms cubic-bezier(0.23, 1, 0.32, 1)',
         }}
       />
       {head !== undefined ? (

@@ -163,8 +163,11 @@ export function Board({ puzzle, onSolved }: BoardProps) {
       <button
         type="button"
         onClick={reset}
-        className="absolute -bottom-12 left-1/2 -translate-x-1/2 rounded-lg px-4 py-2 text-[15px] text-[var(--color-ink-muted)]"
-        style={{ border: '1px solid var(--color-line)' }}
+        className="card-lift absolute -bottom-12 left-1/2 -translate-x-1/2 rounded-lg px-4 py-2 text-[15px] text-[var(--color-text-muted)] active:scale-95"
+        style={{
+          backgroundColor: 'var(--color-bg-card)',
+          border: '1px solid rgba(255, 255, 255, 0.06)',
+        }}
       >
         Recomeçar
       </button>

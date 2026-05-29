@@ -1,36 +1,54 @@
 @import 'tailwindcss';
 
-/* Zip — calm, dark, single teal accent. The board is the hero; chrome stays
- * quiet. No shadow-on-everything, no default blue/purple. (anti-slop UI) */
+/* Zip — barreto.sh palette + chrome, fused with thundle's game-tile feel.
+ * Dark neutral canvas (#0a0a0a), a single electric-blue accent (#0566f8) for
+ * the drawn path and primary actions, amber reserved for the 1v1 opponent.
+ * Space Mono carries headings/numbers/level codes; Space Grotesk carries body.
+ * Board tiles get thundle's elevated rounded-surface + tile-in entrance; the
+ * board stays the hero while a faint decorative grid + ambient glow frame it. */
 @theme {
-  --color-bg: #0b0d12;
-  --color-surface: #12151c;
-  --color-surface-2: #181c25;
-  --color-line: #232936;
-  --color-ink: #e7ebf2;
-  --color-ink-muted: #9aa3b2;
-  --color-ink-dim: #5f6776;
+  /* barreto.sh canonical names */
+  --color-bg: #0a0a0a;
+  --color-bg-card: #141414;
+  --color-bg-card-hover: #1a1a1a;
+  --color-border: #262626;
+  --color-border-hover: #404040;
+  --color-text: #e5e5e5;
+  --color-text-muted: #a3a3a3;
+  --color-text-dim: #737373;
+  --color-accent: #0566f8; /* electric blue — drawn path + primary action */
+  --color-accent-hover: #3d8bfa;
+  --color-accent-dim: #0450c5;
 
-  --color-accent: #5eead4; /* teal — path + primary action */
-  --color-accent-dim: #1f4f49;
-  --color-opp: #f59e0b; /* amber — opponent in 1v1 */
+  /* legacy aliases kept so in-scope + mp components resolve to the new palette
+   * without churning every var reference (visual reskin only). */
+  --color-surface: var(--color-bg-card);
+  --color-surface-2: var(--color-bg-card-hover);
+  --color-line: var(--color-border);
+  --color-ink: var(--color-text);
+  --color-ink-muted: var(--color-text-muted);
+  --color-ink-dim: var(--color-text-dim);
+
+  --color-opp: #f59e0b; /* amber — opponent in 1v1 (kept distinct + warm) */
   --color-danger: #f87171;
 
-  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+  --font-mono: 'Space Mono', ui-monospace, monospace;
+  --font-sans: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
 }
 
 @layer base {
   html {
     color-scheme: dark;
+    /* The canvas colour lives on <html> so the fixed decorative layers
+     * (grid/glow at z-index -1) paint over it while staying behind content. */
+    background-color: var(--color-bg);
     /* page-level: allow normal gestures; the board opts out locally. */
     touch-action: manipulation;
     -webkit-text-size-adjust: 100%;
   }
   body {
     margin: 0;
-    background-color: var(--color-bg);
-    color: var(--color-ink);
+    color: var(--color-text);
     font-family: var(--font-sans);
     font-size: 16px; /* body >= 14px (anti-slop) */
     -webkit-font-smoothing: antialiased;
@@ -42,8 +60,9 @@
   h1,
   h2,
   h3 {
-    letter-spacing: -0.02em;
-    font-weight: 650;
+    font-family: var(--font-mono);
+    letter-spacing: -0.03em;
+    font-weight: 700;
   }
   button {
     font-family: inherit;
@@ -54,6 +73,10 @@
     outline: 2px solid var(--color-accent);
     outline-offset: 2px;
   }
+  ::selection {
+    background-color: color-mix(in srgb, var(--color-accent) 35%, transparent);
+    color: var(--color-text);
+  }
 }
 
 /* The board never scrolls the page while you draw (AC15). Applied to the
@@ -63,6 +86,166 @@
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+}
+
+@layer components {
+  /* barreto.sh chrome -------------------------------------------------- */
+
+  /* Faint architectural grid; a fixed, non-interactive backdrop layer. */
+  .decorative-grid {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+      linear-gradient(var(--color-border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--color-border) 1px, transparent 1px);
+    background-size: 64px 64px;
+    opacity: 0.35;
+  }
+  /* Masked variant — fades the grid toward the edges so it never competes
+   * with content; used as the default page backdrop. */
+  .decorative-grid--masked {
+    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 10%, transparent 75%);
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 10%, transparent 75%);
+  }
+
+  /* Ambient accent glow near the top of a screen; never interactive. */
+  .glow {
+    position: fixed;
+    top: -20vh;
+    left: 50%;
+    z-index: -1;
+    width: min(120vw, 900px);
+    height: 60vh;
+    transform: translateX(-50%);
+    pointer-events: none;
+    background: radial-gradient(
+      50% 50% at 50% 50%,
+      color-mix(in srgb, var(--color-accent) 16%, transparent) 0%,
+      transparent 70%
+    );
+  }
+
+  /* Menu / overlay surface: carded, bordered, with a subtle accent border-glow
+   * that warms on hover. */
+  .spotlight-card {
+    background-color: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: 1rem;
+    transition:
+      border-color 200ms cubic-bezier(0.23, 1, 0.32, 1),
+      box-shadow 200ms cubic-bezier(0.23, 1, 0.32, 1),
+      background-color 200ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  .spotlight-card:hover {
+    border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
+    background-color: var(--color-bg-card-hover);
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--color-accent) 18%, transparent),
+      0 12px 40px -16px color-mix(in srgb, var(--color-accent) 40%, transparent);
+  }
+}
+
+@layer utilities {
+  .section-heading {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+  }
+  .card-lift {
+    transition:
+      transform 180ms cubic-bezier(0.23, 1, 0.32, 1),
+      border-color 180ms cubic-bezier(0.23, 1, 0.32, 1),
+      box-shadow 180ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  .card-lift:hover {
+    transform: translateY(-2px);
+  }
+  .card-lift:active {
+    transform: scale(0.98);
+  }
+  .fade-in {
+    animation: fade-in 320ms cubic-bezier(0.23, 1, 0.32, 1) both;
+  }
+}
+
+/* thundle game-feel keyframes ----------------------------------------- */
+
+/* Tile entrance: flips up from a folded, slightly-shrunk state. */
+@keyframes tile-in {
+  from {
+    opacity: 0;
+    transform: perspective(600px) rotateX(70deg) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: perspective(600px) rotateX(0deg) scale(1);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Win overlay: backdrop opacity, then the card scales + un-blurs in, with its
+ * children staggered. (ported from thundle) */
+@keyframes win-backdrop {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes win-card {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(12px);
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+}
+@keyframes win-element {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shake {
+  10%,
+  90% {
+    transform: translateX(-1px);
+  }
+  20%,
+  80% {
+    transform: translateX(2px);
+  }
+  30%,
+  50%,
+  70% {
+    transform: translateX(-4px);
+  }
+  40%,
+  60% {
+    transform: translateX(4px);
+  }
 }
 
 /* Purposeful motion only; killed under reduced-motion (emil-design-eng). */
