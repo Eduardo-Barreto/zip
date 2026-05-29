@@ -1,11 +1,12 @@
-import { memo } from 'react'
+import { memo, useCallback, useState } from 'react'
+import { formatShare, load } from '../game/progress'
 
 // Module-top-level, memoized (rerender-no-inline-components, rerender-memo).
 // The reward moment: thundle's staggered win reveal ported onto barreto.sh
 // chrome. A blurred backdrop fades in (win-backdrop), an inner card scales +
 // un-blurs (win-card), and its children stagger in (win-element). Primary
-// action carries the electric-blue accent. Motion is honoured-reduced via
-// globals (emil-design-eng).
+// action carries the electric-blue accent; sharing the run lives HERE (the win
+// modal), not on the home screen. Motion is honoured-reduced via globals.
 
 type WinOverlayProps = {
   stars: 1 | 2 | 3
@@ -36,6 +37,18 @@ function el(delay: number): React.CSSProperties {
 }
 
 function WinOverlayImpl({ stars, score, streak, onNext }: WinOverlayProps) {
+  const [shared, setShared] = useState(false)
+  const handleShare = useCallback(async () => {
+    const text = formatShare(load())
+    try {
+      await navigator.clipboard.writeText(text)
+      setShared(true)
+      setTimeout(() => setShared(false), 2000)
+    } catch {
+      window.prompt('Copie seu progresso:', text)
+    }
+  }, [])
+
   return (
     <div
       data-testid="win-overlay"
@@ -94,6 +107,15 @@ function WinOverlayImpl({ stars, score, streak, onNext }: WinOverlayProps) {
           }}
         >
           Próximo
+        </button>
+        <button
+          type="button"
+          onClick={handleShare}
+          data-testid="share-score"
+          className="text-[14px] text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
+          style={el(540)}
+        >
+          {shared ? 'Copiado ✓' : 'Compartilhar score'}
         </button>
       </div>
     </div>
