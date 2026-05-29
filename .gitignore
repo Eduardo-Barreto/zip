@@ -1,0 +1,40 @@
+# deps
+node_modules
+.pnp
+.pnp.js
+
+# build
+dist
+.vite
+*.tsbuildinfo
+
+# env / local
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# editor
+.vscode
+.idea
+*.swp
+
+# logs
+*.log
+
+# coverage
+coverage
+*.lcov
+
+# playwright
+.playwright-cli
+playwright-report
+test-results
+
+# claude / omc runtime state (local-only)
+.claude/
+.agents/
+.omc/

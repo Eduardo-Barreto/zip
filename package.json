@@ -1,0 +1,51 @@
+{
+  "name": "zip-game",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:peer": "peerjs --port 9000 --path /pj --allow_discovery",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "lint": "biome check",
+    "lint:fix": "biome check --write",
+    "format": "biome format --write .",
+    "typecheck": "tsc -b --noEmit",
+    "guard:determinism": "node scripts/check-determinism.mjs",
+    "doctor": "npx react-doctor@latest --verbose",
+    "verify": "bun run typecheck && bun run lint && bun run guard:determinism && bun run test:run && bun run doctor",
+    "prepare": "lefthook install"
+  },
+  "dependencies": {
+    "peerjs": "^1.5.5",
+    "qrcode": "^1.5.4",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "react-router-dom": "^7.15.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.15",
+    "@playwright/test": "^1.50.0",
+    "@tailwindcss/vite": "^4.3.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^6.0.2",
+    "concurrently": "^9.2.1",
+    "jsdom": "27",
+    "lefthook": "^1.13.4",
+    "peer": "^1.0.2",
+    "tailwindcss": "^4.3.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.13",
+    "vitest": "^4.0.0"
+  }
+}
