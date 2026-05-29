@@ -3,7 +3,9 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
-  base: '/',
+  // Project Pages serve under /<repo>/. Only the production Pages build needs
+  // that base (set GITHUB_PAGES in CI); dev / preview / e2e stay at '/'.
+  base: process.env.GITHUB_PAGES ? '/zip/' : '/',
   plugins: [react(), tailwindcss()],
   server: {
     port: Number(process.env.PORT) || 5173,
