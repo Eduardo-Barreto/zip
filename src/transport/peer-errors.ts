@@ -13,6 +13,7 @@ export type PeerErrorKind =
   | 'webrtc'
   | 'negotiation-failed'
   | 'connection-closed'
+  | 'insecure-context'
   | 'unknown'
 
 export type ClassifiedPeerError = {
@@ -41,6 +42,8 @@ const MESSAGES: Record<PeerErrorKind, string> = {
   'negotiation-failed':
     'Falha ao negociar a conexão. Verifique se ambos têm internet e tente novamente.',
   'connection-closed': 'A outra ponta encerrou a conexão.',
+  'insecure-context':
+    'O navegador bloqueou o multiplayer: WebRTC exige página segura. Abra o jogo por https:// ou localhost.',
   unknown: 'Erro desconhecido na conexão.',
 }
 
@@ -66,11 +69,21 @@ export function classifyPeerError(err: unknown): ClassifiedPeerError {
 
 function peerErrorKind(err: unknown): PeerErrorKind {
   if (!err) return 'unknown'
+  if (isInsecureContextError(err)) return 'insecure-context'
   // PeerError carries .type. Plain Errors don't.
   const raw = (err as { type?: unknown }).type
   if (typeof raw !== 'string') return 'unknown'
   if (isKnownKind(raw)) return raw
   return 'unknown'
+}
+
+// Firefox blocks WebRTC outside secure contexts (https/localhost) and throws a
+// DOMException whose raw "The operation is insecure." would otherwise leak to
+// the UI. Duck-typed (name/message) because DOMException can cross realms.
+function isInsecureContextError(err: unknown): boolean {
+  const { name, message } = err as { name?: unknown; message?: unknown }
+  if (name === 'SecurityError') return true
+  return typeof message === 'string' && message.toLowerCase().includes('operation is insecure')
 }
 
 function isKnownKind(s: string): s is PeerErrorKind {
