@@ -31,12 +31,12 @@ export default function Play() {
   const navigate = useNavigate()
   const { completeLevel } = useProgress()
 
-  // Rebuild puzzle + timing when the level changes; `key` on the inner content
-  // would also work, but keying state by level keeps everything in one place.
+  // Rebuild the puzzle when the level changes; `key` on the inner content would
+  // also work, but tracking the live level against a ref keeps it in one place.
   const [puzzle, setPuzzle] = useState(() => generatePuzzle(level))
-  const [puzzleLevel, setPuzzleLevel] = useState(level)
-  if (puzzleLevel !== level) {
-    setPuzzleLevel(level)
+  const puzzleLevelRef = useRef(level)
+  if (puzzleLevelRef.current !== level) {
+    puzzleLevelRef.current = level
     setPuzzle(generatePuzzle(level))
   }
 
