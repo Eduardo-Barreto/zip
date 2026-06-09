@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import Daily from './pages/Daily'
+import Endless from './pages/Endless'
 import Home from './pages/Home'
 import LevelSelect from './pages/LevelSelect'
 import Play from './pages/Play'
@@ -28,6 +29,7 @@ export function App() {
       <Route path="/" element={<Home />} />
       <Route path="/play/:n" element={<Play />} />
       <Route path="/daily" element={<Daily />} />
+      <Route path="/endless/:tier" element={<Endless />} />
       <Route path="/levels" element={<LevelSelect />} />
       <Route
         path="/mp/host"

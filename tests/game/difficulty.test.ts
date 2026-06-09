@@ -7,6 +7,7 @@ import {
   MAX_GRID_AREA,
   MIN_CHECKPOINT_FLOOR,
   paramsFor,
+  tierByValue,
   UNIQUE_CEILING,
 } from '../../src/game/difficulty'
 
@@ -63,6 +64,14 @@ describe('difficulty tiers (single-player + online, Médio default)', () => {
   it('pre-selects Médio as the default tier', () => {
     expect(DEFAULT_TIER.label).toBe('Médio')
     expect(DIFFICULTY_TIERS).toContainEqual(DEFAULT_TIER)
+  })
+
+  it('resolves a tier from its value, undefined otherwise (endless route param)', () => {
+    for (const t of DIFFICULTY_TIERS) {
+      expect(tierByValue(t.value)).toEqual(t)
+    }
+    expect(tierByValue(999)).toBeUndefined()
+    expect(tierByValue(Number.NaN)).toBeUndefined()
   })
 
   it('maps the three tiers to perceptibly distinct, increasing boards', () => {

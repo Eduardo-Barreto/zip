@@ -19,7 +19,7 @@ type WinOverlayProps = {
 
 const STAR_SLOTS = [1, 2, 3] as const
 
-function Stars({ stars }: { stars: 1 | 2 | 3 }) {
+export function Stars({ stars }: { stars: 1 | 2 | 3 }) {
   return (
     <div className="flex gap-2 text-[28px]">
       <span className="sr-only">{`${stars} de 3 estrelas`}</span>
@@ -36,7 +36,7 @@ function Stars({ stars }: { stars: 1 | 2 | 3 }) {
   )
 }
 
-function el(delay: number): React.CSSProperties {
+export function el(delay: number): React.CSSProperties {
   return { animation: `win-element 420ms cubic-bezier(0.23, 1, 0.32, 1) ${delay}ms both` }
 }
 

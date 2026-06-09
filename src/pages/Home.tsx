@@ -4,8 +4,9 @@ import { DEFAULT_TIER, DIFFICULTY_TIERS, type DifficultyTier } from '../game/dif
 import { useProgress } from '../hooks/useProgress'
 
 // Entry screen. Mobile-first, board-is-hero spirit even on the menu: one accent
-// primary action and quiet secondary links. The difficulty tier picks the
-// starting level (see game/difficulty.ts); "Continuar" resumes saved progress.
+// primary action and quiet secondary links. The tier picker feeds the endless
+// mode; the level progression lives behind Continuar/Níveis. Every action
+// carries a one-line description so the modes don't blur together.
 
 function TierButton({
   tier,
@@ -34,6 +35,29 @@ function TierButton({
     >
       {tier.label}
     </button>
+  )
+}
+
+function SecondaryLink({
+  to,
+  label,
+  description,
+  testId,
+}: {
+  to: string
+  label: string
+  description: string
+  testId?: string
+}) {
+  return (
+    <Link
+      to={to}
+      data-testid={testId}
+      className="spotlight-card card-lift rounded-xl px-6 py-3 text-center"
+    >
+      <span className="block text-[15px] text-[var(--color-text)]">{label}</span>
+      <span className="block text-[12px] text-[var(--color-text-dim)]">{description}</span>
+    </Link>
   )
 }
 
@@ -71,46 +95,44 @@ export default function Home() {
 
       <div className="flex flex-col gap-3">
         <Link
-          to={`/play/${tier.value}`}
+          to={`/endless/${tier.value}`}
           data-testid="play-tier"
-          className="btn-accent card-lift rounded-xl px-6 py-4 text-center font-[var(--font-mono)] text-[16px] font-bold tracking-tight active:scale-95"
+          className="btn-accent card-lift rounded-xl px-6 py-4 text-center font-[var(--font-mono)] tracking-tight active:scale-95"
         >
-          Jogar — {tier.label}
+          <span className="block text-[16px] font-bold">Jogar — {tier.label}</span>
+          <span className="block text-[12px] font-normal opacity-80">
+            puzzles sem fim na dificuldade escolhida
+          </span>
         </Link>
         {currentGame > 1 ? (
-          <Link
+          <SecondaryLink
             to={`/play/${currentGame}`}
-            data-testid="continue"
-            className="spotlight-card card-lift rounded-xl px-6 py-3 text-center text-[15px] text-[var(--color-text)]"
-          >
-            Continuar — nível {currentGame}
-          </Link>
+            testId="continue"
+            label={`Continuar — nível ${currentGame}`}
+            description="retomar sua progressão de níveis"
+          />
         ) : null}
-        <Link
+        <SecondaryLink
           to="/daily"
-          data-testid="daily"
-          className="spotlight-card card-lift rounded-xl px-6 py-3 text-center text-[15px] text-[var(--color-text)]"
-        >
-          Desafio diário
-        </Link>
-        <Link
+          testId="daily"
+          label="Desafio diário"
+          description="um puzzle por dia, o mesmo pra todo mundo"
+        />
+        <SecondaryLink
           to="/levels"
-          className="spotlight-card card-lift rounded-xl px-6 py-3 text-center text-[15px] text-[var(--color-text)]"
-        >
-          Níveis
-        </Link>
-        <Link
+          label="Níveis"
+          description="a progressão 1→∞, nível a nível, com estrelas"
+        />
+        <SecondaryLink
           to="/mp/host"
-          className="spotlight-card card-lift rounded-xl px-6 py-3 text-center text-[15px] text-[var(--color-text)]"
-        >
-          Criar sala multiplayer
-        </Link>
-        <Link
+          label="Criar sala multiplayer"
+          description="corrida 1v1 contra um amigo"
+        />
+        <SecondaryLink
           to="/mp/join"
-          className="spotlight-card card-lift rounded-xl px-6 py-3 text-center text-[15px] text-[var(--color-text)]"
-        >
-          Entrar em sala
-        </Link>
+          label="Entrar em sala"
+          description="com o link ou código do anfitrião"
+        />
       </div>
     </main>
   )
