@@ -1,42 +1,11 @@
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { DEFAULT_TIER, DIFFICULTY_TIERS, type DifficultyTier } from '../game/difficulty'
 import { useProgress } from '../hooks/useProgress'
 
 // Entry screen. Mobile-first, board-is-hero spirit even on the menu: one accent
-// primary action and quiet secondary links. The tier picker feeds the endless
-// mode; the level progression lives behind Continuar/Níveis. Every action
-// carries a one-line description so the modes don't blur together.
-
-function TierButton({
-  tier,
-  selected,
-  onSelect,
-}: {
-  tier: DifficultyTier
-  selected: boolean
-  onSelect: (tier: DifficultyTier) => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect(tier)}
-      data-testid={`tier-${tier.label.toLowerCase()}`}
-      className="card-lift rounded-lg py-3 text-center font-[var(--font-mono)] text-[13px] font-bold tracking-tight active:scale-95"
-      style={{
-        backgroundColor: selected
-          ? 'color-mix(in srgb, var(--color-accent) 18%, var(--color-bg-card))'
-          : 'var(--color-bg-card)',
-        border: selected
-          ? '1px solid color-mix(in srgb, var(--color-accent) 55%, transparent)'
-          : '1px solid var(--color-border)',
-        color: selected ? 'var(--color-accent)' : 'var(--color-text-muted)',
-      }}
-    >
-      {tier.label}
-    </button>
-  )
-}
+// primary action and quiet secondary links. The level progression is the main
+// path (Continuar leads); the endless mode asks for its difficulty on its own
+// screen, so the menu stays picker-free. Every action carries a one-line
+// description so the modes don't blur together.
 
 function SecondaryLink({
   to,
@@ -63,7 +32,6 @@ function SecondaryLink({
 
 export default function Home() {
   const { currentGame } = useProgress()
-  const [tier, setTier] = useState<DifficultyTier>(DEFAULT_TIER)
 
   return (
     <main className="fade-in mx-auto flex min-h-[100dvh] max-w-md flex-col justify-center gap-8 px-6 py-10">
@@ -77,45 +45,25 @@ export default function Home() {
         </p>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <p className="font-[var(--font-mono)] text-[12px] uppercase tracking-widest text-[var(--color-text-dim)]">
-          Dificuldade
-        </p>
-        <div className="grid grid-cols-3 gap-2">
-          {DIFFICULTY_TIERS.map((t) => (
-            <TierButton
-              key={t.value}
-              tier={t}
-              selected={t.value === tier.value}
-              onSelect={setTier}
-            />
-          ))}
-        </div>
-      </div>
-
       <div className="flex flex-col gap-3">
         <Link
-          to={`/endless/${tier.value}`}
-          data-testid="play-tier"
+          to={`/play/${currentGame}`}
+          data-testid="continue"
           className="btn-accent card-lift rounded-xl px-6 py-4 text-center font-[var(--font-mono)] tracking-tight active:scale-95"
         >
-          <span className="block text-[16px] font-bold">Jogar — {tier.label}</span>
+          <span className="block text-[16px] font-bold">
+            {currentGame > 1 ? `Continuar — nível ${currentGame}` : 'Jogar — nível 1'}
+          </span>
           <span className="block text-[12px] font-normal opacity-80">
-            puzzles sem fim na dificuldade escolhida
+            a progressão principal, com estrelas
           </span>
         </Link>
-        {currentGame > 1 ? (
-          <SecondaryLink
-            to={`/play/${currentGame}`}
-            testId="continue"
-            label={`Continuar — nível ${currentGame}`}
-            description="retomar sua progressão de níveis"
-          />
-        ) : null}
+        <SecondaryLink to="/levels" label="Níveis" description="escolher um nível já alcançado" />
         <SecondaryLink
-          to="/levels"
-          label="Níveis"
-          description="a progressão 1→∞, nível a nível, com estrelas"
+          to="/endless"
+          testId="endless"
+          label="Modo infinito"
+          description="puzzles sem fim na dificuldade que você escolher"
         />
         <SecondaryLink
           to="/mp/host"

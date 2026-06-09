@@ -27,6 +27,7 @@ export function App() {
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/play/:n" element={<Play />} />
+      <Route path="/endless" element={<Endless />} />
       <Route path="/endless/:tier" element={<Endless />} />
       <Route path="/levels" element={<LevelSelect />} />
       <Route
