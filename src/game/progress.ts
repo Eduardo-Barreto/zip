@@ -115,8 +115,10 @@ const STARS = ['', '★', '★★', '★★★'] as const
  */
 export function formatShare(progress: Progress): string {
   const entries = Object.entries(progress.completed)
-    .map(([n, e]) => ({ n: Number(n), ...e }))
-    .filter((e) => Number.isInteger(e.n))
+    .flatMap(([n, e]) => {
+      const parsed = Number(n)
+      return Number.isInteger(parsed) ? [{ n: parsed, ...e }] : []
+    })
     .sort((a, b) => a.n - b.n)
 
   const totalStars = entries.reduce((sum, e) => sum + e.stars, 0)
