@@ -42,18 +42,53 @@ describe('pathReducer (DOM-free)', () => {
     expect(pathReducer(p, { path: [0] }, { type: 'extendTo', cell: 1 })).toEqual({ path: [0] })
   })
 
-  it('rejects an extend onto an already-visited cell', () => {
+  it('extendTo (drag) is a no-op onto an already-visited cell that is not the head', () => {
     const p = makePuzzle()
     expect(pathReducer(p, { path: [0, 1, 3] }, { type: 'extendTo', cell: 0 })).toEqual({
       path: [0, 1, 3],
     })
   })
 
-  it('BACKTRACKS when moving onto the second-to-last cell (pops the head)', () => {
+  it('extendTo backtracks one step when moving onto the second-to-last cell', () => {
     const p = makePuzzle()
     expect(pathReducer(p, { path: [0, 1, 3] }, { type: 'extendTo', cell: 1 })).toEqual({
       path: [0, 1],
     })
+  })
+
+  it('truncateTo (tap) cuts the trail back to any earlier cell in one action', () => {
+    const p = makePuzzle()
+    expect(pathReducer(p, { path: [0, 1, 3, 2] }, { type: 'truncateTo', cell: 1 })).toEqual({
+      path: [0, 1],
+    })
+    expect(pathReducer(p, { path: [0, 1, 3, 2] }, { type: 'truncateTo', cell: 0 })).toEqual({
+      path: [0],
+    })
+  })
+
+  it('truncateTo is a no-op when the cell is not on the path', () => {
+    const p = makePuzzle()
+    expect(pathReducer(p, { path: [0, 1] }, { type: 'truncateTo', cell: 3 })).toEqual({
+      path: [0, 1],
+    })
+  })
+
+  it('checkpoint order is recomputed after a truncateTo so a re-skip stays blocked', () => {
+    const p: Puzzle = {
+      rows: 2,
+      cols: 2,
+      numbers: new Map<Cell, number>([
+        [0, 1],
+        [2, 2],
+        [1, 3],
+      ]),
+      walls: new Set<string>(),
+      solution: [0, 2, 3, 1],
+      meta: { gameNumber: 0, seed: 0, unique: false, difficultyScore: 0 },
+    }
+    const truncated = pathReducer(p, { path: [0, 2, 3] }, { type: 'truncateTo', cell: 0 })
+    expect(truncated).toEqual({ path: [0] })
+    expect(pathReducer(p, truncated, { type: 'extendTo', cell: 1 })).toEqual({ path: [0] })
   })
 
   it('reset clears the path', () => {
@@ -122,6 +157,25 @@ describe('usePathDrawing (hook)', () => {
 
     act(() => result.current.extendTo(1))
     expect(result.current.path).toEqual([0, 1])
+  })
+
+  it('truncateTo collapses several steps at once; extendTo over a visited cell does not', () => {
+    const p = makePuzzle()
+    const { result } = renderHook(() => usePathDrawing(p))
+
+    act(() => result.current.start(0))
+    act(() => result.current.extendTo(1))
+    act(() => result.current.extendTo(3))
+    act(() => result.current.extendTo(2))
+    expect(result.current.path).toEqual([0, 1, 3, 2])
+
+    // Dragging back over the start (not the second-to-last) must NOT collapse.
+    act(() => result.current.extendTo(0))
+    expect(result.current.path).toEqual([0, 1, 3, 2])
+
+    // A discrete tap on the start does collapse the whole trail in one action.
+    act(() => result.current.truncateTo(0))
+    expect(result.current.path).toEqual([0])
   })
 
   it('rejects an illegal extend through the hook', () => {
