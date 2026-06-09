@@ -66,6 +66,12 @@ export default function Home() {
           description="puzzles sem fim na dificuldade que você escolher"
         />
         <SecondaryLink
+          to="/daily"
+          testId="daily"
+          label="Desafio diário"
+          description="um puzzle por dia, o mesmo pra todo mundo"
+        />
+        <SecondaryLink
           to="/mp/host"
           label="Criar sala multiplayer"
           description="corrida 1v1 contra um amigo"
