@@ -1,0 +1,48 @@
+# Quality gate for every PR (and pushes to main): deterministic checks plus the
+# Playwright end-to-end suite. React Doctor runs in its own workflow.
+name: CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+
+# A newer commit on the same ref makes the in-flight run obsolete.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - name: Typecheck
+        run: bun run typecheck
+      - name: Lint
+        run: bun run lint
+      - name: Determinism guard
+        run: bun run guard:determinism
+      - name: Unit tests
+        run: bun run test:run
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - name: Install Playwright browser
+        run: bunx playwright install --with-deps chromium
+      - name: End-to-end tests
+        run: bun run test:e2e
