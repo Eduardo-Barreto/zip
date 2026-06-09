@@ -179,7 +179,7 @@ export function useMatch(options: UseMatchOptions): UseMatch {
 
     const opts = optionsRef.current
     const alive = () => aliveRef.current
-    const hostEvents = {
+    const sharedEvents = {
       onLobby: (players: LobbyPlayer[]) => alive() && dispatch({ kind: 'lobby', players }),
       onSetup: (setup: MatchSetup) => alive() && dispatch({ kind: 'setup', setup }),
       onStandings: (players: Standing[]) => alive() && dispatch({ kind: 'standings', players }),
@@ -188,16 +188,11 @@ export function useMatch(options: UseMatchOptions): UseMatch {
         alive() && dispatch({ kind: 'rematch_waiting', readyCount, total }),
       onError: (message: string) => alive() && dispatch({ kind: 'error', message }),
     }
+    const hostEvents = sharedEvents
     const guestEvents = {
+      ...sharedEvents,
       onConnected: () => alive() && dispatch({ kind: 'connected' }),
       onWelcome: (you: string) => alive() && dispatch({ kind: 'welcome', you }),
-      onLobby: (players: LobbyPlayer[]) => alive() && dispatch({ kind: 'lobby', players }),
-      onSetup: (setup: MatchSetup) => alive() && dispatch({ kind: 'setup', setup }),
-      onStandings: (players: Standing[]) => alive() && dispatch({ kind: 'standings', players }),
-      onResult: (result: MatchResultData) => alive() && dispatch({ kind: 'result', result }),
-      onRematchWaiting: (readyCount: number, total: number) =>
-        alive() && dispatch({ kind: 'rematch_waiting', readyCount, total }),
-      onError: (message: string) => alive() && dispatch({ kind: 'error', message }),
     }
 
     const pending =
