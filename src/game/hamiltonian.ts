@@ -9,7 +9,7 @@ export const BACKBITE_FACTOR = 4
  * Boustrophedon ("snake") Hamiltonian path — always exists on a rectangle and
  * is our deterministic starting point before randomisation.
  */
-export function snakePath(rows: number, cols: number): Cell[] {
+function snakePath(rows: number, cols: number): Cell[] {
   const path: Cell[] = []
   for (let r = 0; r < rows; r++) {
     if (r % 2 === 0) {

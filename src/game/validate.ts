@@ -61,7 +61,7 @@ export function validatePath(puzzle: Puzzle, path: readonly Cell[]): ValidateRes
 }
 
 /** The cell carrying the highest checkpoint order (order === numbers.size). */
-export function maxOrderCell(puzzle: Puzzle): Cell | undefined {
+function maxOrderCell(puzzle: Puzzle): Cell | undefined {
   const max = puzzle.numbers.size
   if (max === 0) return undefined
   for (const [cell, order] of puzzle.numbers) {

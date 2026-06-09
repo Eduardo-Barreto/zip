@@ -2,7 +2,7 @@ import { hasWall, orthoNeighbors } from './grid'
 import type { Cell, Puzzle } from './types'
 
 /** Node budget bounds the NP-hard search so it never hangs the UI or vitest. */
-export const SOLVER_NODE_BUDGET = 200_000
+const SOLVER_NODE_BUDGET = 200_000
 
 export type CountResult = 'none' | 'unique' | 'multiple' | 'budget_exceeded'
 

@@ -6,8 +6,8 @@ import type { DifficultyParams } from './types'
 // rising via wall density and checkpoint count. difficultyScore(N) is monotonic
 // non-decreasing and built ONLY from intrinsic axes (timePressure excluded).
 
-export const MIN_SIDE = 4
-export const MAX_SIDE = 7
+const MIN_SIDE = 4
+const MAX_SIDE = 7
 export const MAX_GRID_AREA = MAX_SIDE * MAX_SIDE // 49
 /** grids up to this area fit the bounded solver's budget. */
 export const UNIQUE_CEILING = 64
@@ -24,7 +24,7 @@ if (!STEADY_STATE_UNIQUE) {
 export const CLAMP_THRESHOLD = (MAX_SIDE - MIN_SIDE) * 3 + 1 // 10
 
 export const MIN_CHECKPOINT_FLOOR = 0.1
-export const WALL_DENSITY_CAP = 0.45
+const WALL_DENSITY_CAP = 0.45
 const CHECKPOINT_RATIO_CAP = 0.45
 
 function clamp(x: number, lo: number, hi: number): number {
