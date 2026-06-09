@@ -1,4 +1,4 @@
-import { memo, useCallback, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { formatLevelShare } from '../game/progress'
 
 // Module-top-level, memoized (rerender-no-inline-components, rerender-memo).
@@ -42,16 +42,23 @@ export function el(delay: number): React.CSSProperties {
 
 function WinOverlayImpl({ gameNumber, timeMs, stars, score, streak, onNext }: WinOverlayProps) {
   const [shared, setShared] = useState(false)
+  const sharedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(
+    () => () => {
+      if (sharedTimer.current !== null) clearTimeout(sharedTimer.current)
+    },
+    [],
+  )
   const handleShare = useCallback(async () => {
-    // Share only THIS level's result (Wordle-style), not the whole history.
-    // The game URL lets receivers jump straight in; falls back to a prompt when
-    // the clipboard is unavailable (insecure context / denied permission).
+    // Falls back to a prompt when the clipboard is unavailable (insecure
+    // context / denied permission).
     const url = typeof window !== 'undefined' ? window.location.origin : undefined
     const text = formatLevelShare(gameNumber, { timeMs, stars, streak }, url)
     try {
       await navigator.clipboard.writeText(text)
       setShared(true)
-      setTimeout(() => setShared(false), 2000)
+      if (sharedTimer.current !== null) clearTimeout(sharedTimer.current)
+      sharedTimer.current = setTimeout(() => setShared(false), 2000)
     } catch {
       window.prompt('Copie seu resultado:', text)
     }
