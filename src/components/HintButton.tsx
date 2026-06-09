@@ -82,9 +82,7 @@ function HintButtonImpl({ puzzle, boardRef, getPrefix, onHintUsed }: HintButtonP
         Dica
       </button>
       {message !== '' ? (
-        <span className="text-[14px] text-[var(--color-text-muted)]" role="status">
-          {HINT_TEXT[message]}
-        </span>
+        <output className="text-[14px] text-[var(--color-text-muted)]">{HINT_TEXT[message]}</output>
       ) : null}
     </div>
   )
