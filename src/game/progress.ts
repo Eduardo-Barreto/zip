@@ -62,24 +62,13 @@ export function save(progress: Progress, storage: StorageLike | null = defaultSt
 function normalize(data: unknown): Progress {
   if (!isObject(data)) return freshProgress()
   const v = data.version
-  if (v === CURRENT_VERSION) return coerce(data)
-  if (v === undefined || v === 0) return migrate(data) // legacy / unversioned
+  if (v === CURRENT_VERSION || v === undefined || v === 0) return coerce(data)
   // version > 1: a future, forward-incompatible save — distrust it.
   console.warn(`zip: unknown progress version ${String(v)}, resetting`)
   return freshProgress()
 }
 
-/** Promote a legacy (unversioned / v0) blob, mapping known fields. */
-function migrate(data: Record<string, unknown>): Progress {
-  const base = freshProgress()
-  return {
-    version: CURRENT_VERSION,
-    currentGame: asPositiveInt(data.currentGame, base.currentGame),
-    completed: asCompleted(data.completed),
-    streak: asNonNegInt(data.streak, base.streak),
-  }
-}
-
+/** Map a current or legacy blob field-for-field onto the current shape. */
 function coerce(data: Record<string, unknown>): Progress {
   const base = freshProgress()
   return {
