@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useState } from 'react'
 import { formatLevelShare } from '../game/progress'
 import { el } from './win-anim'
 
@@ -39,13 +39,12 @@ export function Stars({ stars }: { stars: 1 | 2 | 3 }) {
 
 function WinOverlayImpl({ gameNumber, timeMs, stars, score, streak, onNext }: WinOverlayProps) {
   const [shared, setShared] = useState(false)
-  const sharedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(
-    () => () => {
-      if (sharedTimer.current !== null) clearTimeout(sharedTimer.current)
-    },
-    [],
-  )
+  // The effect owns the 2s "Copiado ✓" reset, so it is cleared on unmount too.
+  useEffect(() => {
+    if (!shared) return
+    const id = setTimeout(() => setShared(false), 2000)
+    return () => clearTimeout(id)
+  }, [shared])
   const handleShare = useCallback(async () => {
     // Falls back to a prompt when the clipboard is unavailable (insecure
     // context / denied permission).
@@ -54,8 +53,6 @@ function WinOverlayImpl({ gameNumber, timeMs, stars, score, streak, onNext }: Wi
     try {
       await navigator.clipboard.writeText(text)
       setShared(true)
-      if (sharedTimer.current !== null) clearTimeout(sharedTimer.current)
-      sharedTimer.current = setTimeout(() => setShared(false), 2000)
     } catch {
       window.prompt('Copie seu resultado:', text)
     }
