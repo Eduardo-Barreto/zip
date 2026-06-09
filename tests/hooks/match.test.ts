@@ -8,6 +8,7 @@ import {
   type MatchResultData,
   type MatchSetup,
   rankStandings,
+  seriesTarget,
 } from '../../src/hooks/matchController'
 import { memoryTransport, resetMemoryTransport } from '../../src/transport/memory-transport'
 import type { GuestToHost, HostToGuest, LobbyPlayer, Standing } from '../../src/transport/messages'
@@ -27,7 +28,9 @@ import type {
 // silent to clients by design.
 
 const ROOM = 'WXYZ'
-const SETUP: MatchSetup = { seed: 42, difficulty: 12 }
+// Default fixture uses the endless (∞) format so the existing rematch/scoreboard
+// tests keep their original semantics; series-specific tests set bestOf locally.
+const SETUP: MatchSetup = { seed: 42, difficulty: 12, bestOf: null }
 
 function notifyingTransport(): TransportFactory {
   type Conn = { client: ClientHandlers; host: HostHandlers; id: string; closed: boolean }
@@ -566,6 +569,133 @@ describe('AC7 (through the controller): standings broadcasts are throttled with 
     host.reportProgress(16, 16)
     await tick()
     expect(hostInto.standings.length - baseline).toBe(2)
+
+    guest.close()
+    host.close()
+  })
+})
+
+describe('series format (best-of-N win condition)', () => {
+  it('seriesTarget is the round-win majority, or null for ∞', () => {
+    expect(seriesTarget(3)).toBe(2)
+    expect(seriesTarget(5)).toBe(3)
+    expect(seriesTarget(7)).toBe(4)
+    expect(seriesTarget(null)).toBeNull()
+  })
+
+  it('best-of-3: a champion is declared only once a player reaches 2 round wins', async () => {
+    const hostInto = newHostInto()
+    const guestInto = newGuestInto()
+    let nextSeed = 8000
+    const host = await createHostMatch(
+      memoryTransport,
+      ROOM,
+      { seed: 42, difficulty: 12, bestOf: 3 },
+      hostEvents(hostInto),
+      () => performance.now(),
+      () => ++nextSeed,
+    )
+    const guest = await createGuestMatch(memoryTransport, ROOM, guestEvents(guestInto), 'g1')
+    await settle()
+    guest.setReady(true)
+    await tick()
+    host.start()
+    await tick()
+
+    // Round 1: host wins (1-0). Series not decided yet.
+    host.reportSolved(900)
+    await tick()
+    expect(hostInto.results.at(-1)?.championId).toBeNull()
+    expect(guestInto.results.at(-1)?.championId).toBeNull()
+
+    // Round 2: host wins again (2-0) -> clinches the best-of-3.
+    host.voteRematch()
+    guest.voteRematch()
+    await tick()
+    host.reportSolved(900)
+    await tick()
+    const final = hostInto.results.at(-1)
+    expect(final?.winnerId).toBe(HOST_ID)
+    expect(final?.championId).toBe(HOST_ID)
+    expect(guestInto.results.at(-1)?.championId).toBe(HOST_ID)
+    // The mid-series rematch kept the tally (1-0 → 2-0), it didn't reset it.
+    expect(final?.standings.find((s) => s.id === HOST_ID)?.wins).toBe(2)
+
+    guest.close()
+    host.close()
+  })
+
+  it('∞ never declares a champion, even after many wins', async () => {
+    const hostInto = newHostInto()
+    const guestInto = newGuestInto()
+    let nextSeed = 9000
+    const host = await createHostMatch(
+      memoryTransport,
+      ROOM,
+      { seed: 42, difficulty: 12, bestOf: null },
+      hostEvents(hostInto),
+      () => performance.now(),
+      () => ++nextSeed,
+    )
+    const guest = await createGuestMatch(memoryTransport, ROOM, guestEvents(guestInto), 'g1')
+    await settle()
+    guest.setReady(true)
+    await tick()
+    host.start()
+    await tick()
+
+    for (let round = 0; round < 3; round++) {
+      host.reportSolved(900)
+      await tick()
+      expect(hostInto.results.at(-1)?.championId).toBeNull()
+      host.voteRematch()
+      guest.voteRematch()
+      await tick()
+    }
+
+    guest.close()
+    host.close()
+  })
+
+  it('a rematch after a clinched series opens a fresh series (win tally resets)', async () => {
+    const hostInto = newHostInto()
+    const guestInto = newGuestInto()
+    let nextSeed = 9500
+    const host = await createHostMatch(
+      memoryTransport,
+      ROOM,
+      { seed: 42, difficulty: 12, bestOf: 3 },
+      hostEvents(hostInto),
+      () => performance.now(),
+      () => ++nextSeed,
+    )
+    const guest = await createGuestMatch(memoryTransport, ROOM, guestEvents(guestInto), 'g1')
+    await settle()
+    guest.setReady(true)
+    await tick()
+    host.start()
+    await tick()
+
+    // Host clinches a best-of-3 in two rounds.
+    host.reportSolved(900)
+    await tick()
+    host.voteRematch()
+    guest.voteRematch()
+    await tick()
+    host.reportSolved(900)
+    await tick()
+    expect(hostInto.results.at(-1)?.championId).toBe(HOST_ID)
+
+    // New series: round-1 result shows the tally reset to 1-0, not 3-0.
+    host.voteRematch()
+    guest.voteRematch()
+    await tick()
+    guest.reportSolved(800)
+    await tick()
+    const r = hostInto.results.at(-1)
+    expect(r?.championId).toBeNull()
+    expect(r?.standings.find((s) => s.id === 'zip-guest-g1')?.wins).toBe(1)
+    expect(r?.standings.find((s) => s.id === HOST_ID)?.wins).toBe(0)
 
     guest.close()
     host.close()

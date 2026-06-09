@@ -58,7 +58,7 @@ function sameWirePuzzleTest(factory: TransportFactory, label: string) {
 
     const hostSeed = 137
     const hostDifficulty = 12
-    host.broadcast({ t: 'match_setup', seed: hostSeed, difficulty: hostDifficulty })
+    host.broadcast({ t: 'match_setup', seed: hostSeed, difficulty: hostDifficulty, bestOf: 3 })
 
     await new Promise((r) => setTimeout(r, 20))
 

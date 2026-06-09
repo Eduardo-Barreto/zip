@@ -1,4 +1,11 @@
-import type { GuestToHost, HostToGuest, LobbyPlayer, ResultReason, Standing } from './messages'
+import type {
+  GuestToHost,
+  HostToGuest,
+  LobbyPlayer,
+  ResultReason,
+  SeriesFormat,
+  Standing,
+} from './messages'
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   if (typeof v !== 'object' || v === null || Array.isArray(v)) return false
@@ -14,6 +21,10 @@ function isFiniteNumber(v: unknown): v is number {
 
 function isReason(v: unknown): v is ResultReason {
   return v === 'solved' || v === 'host_left'
+}
+
+function isSeriesFormat(v: unknown): v is SeriesFormat {
+  return v === null || v === 3 || v === 5 || v === 7
 }
 
 function isLobbyPlayer(v: unknown): v is LobbyPlayer {
@@ -73,6 +84,7 @@ export function parseHostToGuest(v: unknown): HostToGuest | null {
     case 'match_setup':
       if (!isFiniteNumber(v.seed) || !isFiniteNumber(v.difficulty)) return null
       if (v.difficulty < 1) return null
+      if (!isSeriesFormat(v.bestOf)) return null
       return v as unknown as HostToGuest
     case 'standings':
       if (!Array.isArray(v.players) || !v.players.every(isStanding)) return null
@@ -81,6 +93,7 @@ export function parseHostToGuest(v: unknown): HostToGuest | null {
       if (!Array.isArray(v.standings) || !v.standings.every(isStanding)) return null
       if (!isReason(v.reason)) return null
       if (v.winnerId !== null && typeof v.winnerId !== 'string') return null
+      if (v.championId !== null && typeof v.championId !== 'string') return null
       return v as unknown as HostToGuest
     }
     case 'rematch_waiting':

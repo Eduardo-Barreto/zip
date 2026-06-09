@@ -1,6 +1,6 @@
 import { useEffect, useReducer, useRef } from 'react'
 
-import type { LobbyPlayer, Standing } from '../transport/messages'
+import type { LobbyPlayer, SeriesFormat, Standing } from '../transport/messages'
 import type { TransportFactory } from '../transport/transport'
 import {
   createGuestMatch,
@@ -105,6 +105,7 @@ type HostOptions = {
   transport: TransportFactory
   seed: number
   difficulty: number
+  bestOf: SeriesFormat
   now?: () => number
 }
 
@@ -200,7 +201,7 @@ export function useMatch(options: UseMatchOptions): UseMatch {
         ? createHostMatch(
             transport,
             roomCode,
-            { seed: opts.seed, difficulty: opts.difficulty },
+            { seed: opts.seed, difficulty: opts.difficulty, bestOf: opts.bestOf },
             hostEvents,
             opts.now ?? (() => performance.now()),
           )
