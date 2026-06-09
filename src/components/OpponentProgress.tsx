@@ -33,12 +33,12 @@ function OpponentProgressImpl({ filled, total, label = 'Oponente' }: OpponentPro
         aria-label="Progresso do oponente"
       >
         <div
-          className="h-full rounded-full"
+          className="h-full w-full origin-left rounded-full"
           style={{
-            width: `${pct}%`,
+            transform: `scaleX(${pct / 100})`,
             backgroundColor: '#f59e0b',
             boxShadow: '0 0 8px color-mix(in srgb, #f59e0b 55%, transparent)',
-            transition: 'width 160ms cubic-bezier(0.23, 1, 0.32, 1)',
+            transition: 'transform 160ms cubic-bezier(0.23, 1, 0.32, 1)',
           }}
         />
       </div>

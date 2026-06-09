@@ -22,12 +22,12 @@ function ProgressBarImpl({ filled, total }: ProgressBarProps) {
       aria-label="Progresso do tabuleiro"
     >
       <div
-        className="h-full rounded-full"
+        className="h-full w-full origin-left rounded-full"
         style={{
-          width: `${pct}%`,
+          transform: `scaleX(${pct / 100})`,
           backgroundColor: 'var(--color-accent)',
           boxShadow: '0 0 8px color-mix(in srgb, var(--color-accent) 60%, transparent)',
-          transition: 'width 160ms cubic-bezier(0.23, 1, 0.32, 1)',
+          transition: 'transform 160ms cubic-bezier(0.23, 1, 0.32, 1)',
         }}
       />
     </div>
