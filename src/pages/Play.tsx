@@ -23,7 +23,7 @@ function parseLevel(raw: string | undefined): number {
   return Number.isInteger(n) && n >= 1 ? n : 1
 }
 
-type WinState = { result: LevelResult; streak: number }
+type WinState = { result: LevelResult; streak: number; timeMs: number }
 
 export default function Play() {
   const params = useParams()
@@ -67,7 +67,7 @@ export default function Play() {
       hintsUsed: hintsRef.current,
     })
     startTransition(() => {
-      setWin({ result, streak: next.streak })
+      setWin({ result, streak: next.streak, timeMs })
     })
   }, [timer, level, completeLevel])
 
@@ -109,6 +109,8 @@ export default function Play() {
         </div>
         {win !== null ? (
           <WinOverlay
+            gameNumber={level}
+            timeMs={win.timeMs}
             stars={win.result.stars}
             score={win.result.score}
             streak={win.streak}

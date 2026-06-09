@@ -1,5 +1,5 @@
-import { memo, useCallback, useState } from 'react'
-import { formatShare, load } from '../game/progress'
+import { memo, useCallback, useEffect, useState } from 'react'
+import { formatLevelShare } from '../game/progress'
 
 // Module-top-level, memoized (rerender-no-inline-components, rerender-memo).
 // The reward moment: thundle's staggered win reveal ported onto barreto.sh
@@ -9,6 +9,8 @@ import { formatShare, load } from '../game/progress'
 // modal), not on the home screen. Motion is honoured-reduced via globals.
 
 type WinOverlayProps = {
+  gameNumber: number
+  timeMs: number
   stars: 1 | 2 | 3
   score: number
   streak: number
@@ -38,18 +40,26 @@ function el(delay: number): React.CSSProperties {
   return { animation: `win-element 420ms cubic-bezier(0.23, 1, 0.32, 1) ${delay}ms both` }
 }
 
-function WinOverlayImpl({ stars, score, streak, onNext }: WinOverlayProps) {
+function WinOverlayImpl({ gameNumber, timeMs, stars, score, streak, onNext }: WinOverlayProps) {
   const [shared, setShared] = useState(false)
+  // The effect owns the 2s "Copiado ✓" reset, so it is cleared on unmount too.
+  useEffect(() => {
+    if (!shared) return
+    const id = setTimeout(() => setShared(false), 2000)
+    return () => clearTimeout(id)
+  }, [shared])
   const handleShare = useCallback(async () => {
-    const text = formatShare(load())
+    // Falls back to a prompt when the clipboard is unavailable (insecure
+    // context / denied permission).
+    const url = typeof window !== 'undefined' ? window.location.origin : undefined
+    const text = formatLevelShare(gameNumber, { timeMs, stars, streak }, url)
     try {
       await navigator.clipboard.writeText(text)
       setShared(true)
-      setTimeout(() => setShared(false), 2000)
     } catch {
-      window.prompt('Copie seu progresso:', text)
+      window.prompt('Copie seu resultado:', text)
     }
-  }, [])
+  }, [gameNumber, timeMs, stars, streak])
 
   return (
     <div
