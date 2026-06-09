@@ -19,10 +19,12 @@ const STAR_SLOTS = [1, 2, 3] as const
 
 function Stars({ stars }: { stars: 1 | 2 | 3 }) {
   return (
-    <div className="flex gap-2 text-[28px]" role="img" aria-label={`${stars} de 3 estrelas`}>
+    <div className="flex gap-2 text-[28px]">
+      <span className="sr-only">{`${stars} de 3 estrelas`}</span>
       {STAR_SLOTS.map((i) => (
         <span
           key={i}
+          aria-hidden="true"
           style={{ color: i <= stars ? 'var(--color-accent)' : 'var(--color-text-dim)' }}
         >
           {i <= stars ? '★' : '☆'}
