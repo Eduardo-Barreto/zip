@@ -618,6 +618,8 @@ describe('series format (best-of-N win condition)', () => {
     expect(final?.winnerId).toBe(HOST_ID)
     expect(final?.championId).toBe(HOST_ID)
     expect(guestInto.results.at(-1)?.championId).toBe(HOST_ID)
+    // The mid-series rematch kept the tally (1-0 → 2-0), it didn't reset it.
+    expect(final?.standings.find((s) => s.id === HOST_ID)?.wins).toBe(2)
 
     guest.close()
     host.close()

@@ -142,6 +142,10 @@ describe('AC19: hostile payloads rejected (return null)', () => {
     ['result: bad reason', { t: 'result', standings: [], winnerId: null, reason: 'kicked' }],
     ['result: winnerId wrong type', { t: 'result', standings: [], winnerId: 5, reason: 'solved' }],
     [
+      'result: championId wrong type',
+      { t: 'result', standings: [], winnerId: null, reason: 'solved', championId: 7 },
+    ],
+    [
       'result: bad standing timeMs',
       {
         t: 'result',
