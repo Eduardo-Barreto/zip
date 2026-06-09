@@ -55,6 +55,28 @@ export function paramsFor(N: number): DifficultyParams {
   return { rows, cols, checkpoints, checkpointRatio, wallDensity, requireUnique, timePressure }
 }
 
+// --- Difficulty tiers (shared by endless mode + online host) ------------------
+// A tier maps a friendly label onto a generation anchor N: paramsFor(value)
+// fixes the board recipe for that tier (endless and online stay at it; the
+// level progression is a separate 1→∞ climb). Values land on clearly distinct
+// boards (4×4 / 6×6 / 7×7+walls); Médio is the default.
+// (The retired "Extremo" tier added nothing distinct over Difícil.)
+
+export type DifficultyTier = { label: string; value: number }
+
+export const DIFFICULTY_TIERS = [
+  { label: 'Fácil', value: 3 },
+  { label: 'Médio', value: 7 },
+  { label: 'Difícil', value: 12 },
+] as const satisfies readonly DifficultyTier[]
+
+/** Pre-selected tier in both the single-player start and the online host. */
+export const DEFAULT_TIER: DifficultyTier = DIFFICULTY_TIERS[1]
+
+export function tierByValue(value: number): DifficultyTier | undefined {
+  return DIFFICULTY_TIERS.find((t) => t.value === value)
+}
+
 /**
  * Monotonic non-decreasing difficulty metric over INTRINSIC axes only
  * (grid area, wall density, checkpoint count, uniqueness) — timePressure is a

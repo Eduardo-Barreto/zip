@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { JoinLinkBox } from '../../components/JoinLinkBox'
 import { PlayerList } from '../../components/PlayerList'
+import { DEFAULT_TIER, DIFFICULTY_TIERS, type DifficultyTier } from '../../game/difficulty'
 import { generatePuzzleWith } from '../../game/generate'
 import { randomMatchSeed } from '../../hooks/matchController'
 import { useMatch } from '../../hooks/useMatch'
@@ -15,22 +16,8 @@ import { ResultView } from './Result'
 // Host page: pick a difficulty and a series format, then open a room and share
 // it. Guests join into a lobby and mark themselves Pronto; the host starts
 // everyone at once. The peer room stays open across rematches. The host is seat
-// 1 and counts as a player.
-
-// ---------------------------------------------------------------------------
-// Difficulty tiers + series format
-// ---------------------------------------------------------------------------
-
-type DifficultyTier = { label: string; value: number }
-
-const DIFFICULTY_TIERS: DifficultyTier[] = [
-  { label: 'Fácil', value: 3 },
-  { label: 'Médio', value: 12 },
-  { label: 'Difícil', value: 30 },
-  { label: 'Extremo', value: 60 },
-]
-
-const DEFAULT_DIFFICULTY: DifficultyTier = { label: 'Médio', value: 12 }
+// 1 and counts as a player. Difficulty tiers (Fácil/Médio/Difícil, Médio
+// default) are shared with the single-player start — see game/difficulty.ts.
 
 const SERIES_OPTIONS: SeriesFormat[] = [3, 5, 7, null]
 const DEFAULT_SERIES: SeriesFormat = 3
@@ -58,7 +45,7 @@ type SetupPickerProps = { onConfirm: (config: RoomConfig) => void }
 
 function SetupPicker({ onConfirm }: SetupPickerProps) {
   const navigate = useNavigate()
-  const [difficulty, setDifficulty] = useState<DifficultyTier>(DEFAULT_DIFFICULTY)
+  const [difficulty, setDifficulty] = useState<DifficultyTier>(DEFAULT_TIER)
   const [bestOf, setBestOf] = useState<SeriesFormat>(DEFAULT_SERIES)
 
   return (
@@ -77,7 +64,7 @@ function SetupPicker({ onConfirm }: SetupPickerProps) {
         <p className="font-[var(--font-mono)] text-[12px] uppercase tracking-widest text-[var(--color-text-dim)]">
           Dificuldade
         </p>
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           {DIFFICULTY_TIERS.map((tier) => (
             <DifficultyButton
               key={tier.value}

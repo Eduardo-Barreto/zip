@@ -2,8 +2,33 @@ import { Link } from 'react-router-dom'
 import { useProgress } from '../hooks/useProgress'
 
 // Entry screen. Mobile-first, board-is-hero spirit even on the menu: one accent
-// primary action (Continue) and quiet secondary links. Sharing the run lives in
-// the win modal, not here.
+// primary action and quiet secondary links. The level progression is the main
+// path (Continuar leads); the endless mode asks for its difficulty on its own
+// screen, so the menu stays picker-free. Every action carries a one-line
+// description so the modes don't blur together.
+
+function SecondaryLink({
+  to,
+  label,
+  description,
+  testId,
+}: {
+  to: string
+  label: string
+  description: string
+  testId?: string
+}) {
+  return (
+    <Link
+      to={to}
+      data-testid={testId}
+      className="spotlight-card card-lift rounded-xl px-6 py-3 text-center"
+    >
+      <span className="block text-[15px] text-[var(--color-text)]">{label}</span>
+      <span className="block text-[12px] text-[var(--color-text-dim)]">{description}</span>
+    </Link>
+  )
+}
 
 export default function Home() {
   const { currentGame } = useProgress()
@@ -23,28 +48,33 @@ export default function Home() {
       <div className="flex flex-col gap-3">
         <Link
           to={`/play/${currentGame}`}
-          className="btn-accent card-lift rounded-xl px-6 py-4 text-center font-[var(--font-mono)] text-[16px] font-bold tracking-tight active:scale-95"
+          data-testid="continue"
+          className="btn-accent card-lift rounded-xl px-6 py-4 text-center font-[var(--font-mono)] tracking-tight active:scale-95"
         >
-          Continuar — nível {currentGame}
+          <span className="block text-[16px] font-bold">
+            {currentGame > 1 ? `Continuar — nível ${currentGame}` : 'Jogar — nível 1'}
+          </span>
+          <span className="block text-[12px] font-normal opacity-80">
+            a progressão principal, com estrelas
+          </span>
         </Link>
-        <Link
-          to="/levels"
-          className="spotlight-card card-lift rounded-xl px-6 py-3 text-center text-[15px] text-[var(--color-text)]"
-        >
-          Níveis
-        </Link>
-        <Link
+        <SecondaryLink to="/levels" label="Níveis" description="escolher um nível já alcançado" />
+        <SecondaryLink
+          to="/endless"
+          testId="endless"
+          label="Modo infinito"
+          description="puzzles sem fim na dificuldade que você escolher"
+        />
+        <SecondaryLink
           to="/mp/host"
-          className="spotlight-card card-lift rounded-xl px-6 py-3 text-center text-[15px] text-[var(--color-text)]"
-        >
-          Criar sala multiplayer
-        </Link>
-        <Link
+          label="Criar sala multiplayer"
+          description="corrida 1v1 contra um amigo"
+        />
+        <SecondaryLink
           to="/mp/join"
-          className="spotlight-card card-lift rounded-xl px-6 py-3 text-center text-[15px] text-[var(--color-text)]"
-        >
-          Entrar em sala
-        </Link>
+          label="Entrar em sala"
+          description="com o link ou código do anfitrião"
+        />
       </div>
     </main>
   )

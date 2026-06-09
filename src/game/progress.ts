@@ -97,7 +97,7 @@ export function recordCompletion(
   }
 }
 
-// --- share (score + per-level best times) -------------------------------------
+// --- share (per-level, Wordle-style) ------------------------------------------
 
 function fmtTime(ms: number): string {
   const total = Math.floor(ms / 1000)
@@ -108,32 +108,25 @@ function fmtTime(ms: number): string {
 
 const STARS = ['', '★', '★★', '★★★'] as const
 
-/**
- * A shareable summary of progress — what actually makes sense to share: the
- * levels cleared and the best time (+ stars) for each. Plain text, clipboard-
- * and chat-friendly.
- */
-export function formatShare(progress: Progress): string {
-  const entries = Object.entries(progress.completed)
-    .flatMap(([n, e]) => {
-      const parsed = Number(n)
-      return Number.isInteger(parsed) ? [{ n: parsed, ...e }] : []
-    })
-    .sort((a, b) => a.n - b.n)
+export type LevelShare = { timeMs: number; stars: number; streak: number }
 
-  const totalStars = entries.reduce((sum, e) => sum + e.stars, 0)
+/**
+ * The result of ONE just-finished level, in the Wordle mould: a compact, paste-
+ * anywhere brag with no grid and no solution spoiler — just the level number,
+ * time, stars, and current streak, with an optional link back to the game:
+ *
+ *   Zip 🟦 #014
+ *   ⏱ 1:02 · ★★★ · sequência 7🔥
+ *   <url>
+ */
+export function formatLevelShare(gameNumber: number, result: LevelShare, url?: string): string {
+  const code = `#${String(gameNumber).padStart(3, '0')}`
+  const stars = STARS[Math.max(0, Math.min(3, result.stars))]
   const lines = [
-    'Zip 🟦',
-    `Nível ${progress.currentGame} · sequência ${progress.streak}🔥 · ${totalStars}★`,
+    `Zip 🟦 ${code}`,
+    `⏱ ${fmtTime(result.timeMs)} · ${stars} · sequência ${result.streak}🔥`,
   ]
-  if (entries.length > 0) {
-    lines.push('')
-    for (const e of entries) {
-      const code = `#${String(e.n).padStart(3, '0')}`
-      const stars = STARS[Math.max(0, Math.min(3, e.stars))]
-      lines.push(`${code}  ${fmtTime(e.bestTimeMs)}  ${stars}`)
-    }
-  }
+  if (url) lines.push(url)
   return lines.join('\n')
 }
 
