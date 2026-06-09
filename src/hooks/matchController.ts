@@ -3,6 +3,7 @@ import type {
   HostToGuest,
   LobbyPlayer,
   ResultReason,
+  SeriesFormat,
   Standing,
 } from '../transport/messages'
 import { generateGuestLocalId, guestPeerId, hostPeerId } from '../transport/peer-ids'
@@ -21,12 +22,19 @@ import { makeProgressThrottle, type ProgressThrottle } from './throttle'
 /** The host's own seat id. Guests use their transport client id. */
 export const HOST_ID = 'host'
 
-export type MatchSetup = { seed: number; difficulty: number }
+export type MatchSetup = { seed: number; difficulty: number; bestOf: SeriesFormat }
 
 export type MatchResultData = {
   standings: Standing[]
   winnerId: string | null
   reason: ResultReason
+  /** Set once a player clinches a best-of-N series; null mid-series and in ∞. */
+  championId: string | null
+}
+
+/** Round wins needed to clinch a series, or null for the endless (∞) format. */
+export function seriesTarget(bestOf: SeriesFormat): number | null {
+  return bestOf === null ? null : Math.floor(bestOf / 2) + 1
 }
 
 /** Generate a non-deterministic match seed (lives in hooks/, outside src/game). */
@@ -112,6 +120,10 @@ export function createHostMatch(
 ): Promise<HostMatch> {
   let host: PeerHost | null = null
   const difficulty = initialSetup.difficulty
+  const bestOf = initialSetup.bestOf
+  const target = seriesTarget(bestOf)
+  // Set when a player clinches the series; cleared when the next series begins.
+  let seriesChampion: string | null = null
   let phase: 'lobby' | 'racing' | 'results' = 'lobby'
   let nextSeat = 2
   // The puzzle seed of the race in progress and the last finished result, kept
@@ -152,6 +164,11 @@ export function createHostMatch(
   }
 
   function beginRace(seed: number) {
+    // A rematch AFTER a series concluded opens a NEW series: clear the tally.
+    if (seriesChampion !== null) {
+      for (const s of players.values()) s.wins = 0
+      seriesChampion = null
+    }
     for (const s of players.values()) {
       s.filled = 0
       s.total = 0
@@ -163,8 +180,8 @@ export function createHostMatch(
     currentSeed = seed
     lastResult = null
     throttle.reset()
-    host?.broadcast({ t: 'match_setup', seed, difficulty })
-    events.onSetup({ seed, difficulty })
+    host?.broadcast({ t: 'match_setup', seed, difficulty, bestOf })
+    events.onSetup({ seed, difficulty, bestOf })
   }
 
   function broadcastStandings(force: boolean) {
@@ -201,11 +218,16 @@ export function createHostMatch(
       const seat = players.get(winnerId)
       if (seat) seat.wins += 1
     }
+    // The round winner clinches the series once it reaches the win target.
+    const winnerWins = winnerId !== null ? (players.get(winnerId)?.wins ?? 0) : 0
+    const championId =
+      target !== null && winnerId !== null && winnerWins >= target ? winnerId : null
+    seriesChampion = championId
     const standings = rankStandings([...players.values()])
     for (const s of players.values()) s.rematchReady = false
-    lastResult = { standings, winnerId, reason }
-    host?.broadcast({ t: 'result', standings, winnerId, reason })
-    events.onResult({ standings, winnerId, reason })
+    lastResult = { standings, winnerId, reason, championId }
+    host?.broadcast({ t: 'result', standings, winnerId, reason, championId })
+    events.onResult({ standings, winnerId, reason, championId })
   }
 
   function broadcastRematchWaiting() {
@@ -273,7 +295,7 @@ export function createHostMatch(
         // cast a rematch vote (otherwise they'd silently block the all-vote
         // gate, since they already count toward players.size).
         if (phase === 'racing') {
-          host?.send(clientId, { t: 'match_setup', seed: currentSeed, difficulty })
+          host?.send(clientId, { t: 'match_setup', seed: currentSeed, difficulty, bestOf })
           host?.send(clientId, { t: 'standings', players: rankStandings([...players.values()]) })
         } else if (phase === 'results' && lastResult !== null) {
           host?.send(clientId, {
@@ -281,6 +303,7 @@ export function createHostMatch(
             standings: lastResult.standings,
             winnerId: lastResult.winnerId,
             reason: lastResult.reason,
+            championId: lastResult.championId,
           })
           broadcastRematchWaiting()
         }
@@ -406,7 +429,7 @@ export function createGuestMatch(
           case 'match_setup':
             finished = false
             throttle.reset()
-            events.onSetup({ seed: msg.seed, difficulty: msg.difficulty })
+            events.onSetup({ seed: msg.seed, difficulty: msg.difficulty, bestOf: msg.bestOf })
             break
           case 'standings':
             events.onStandings(msg.players)
@@ -417,6 +440,7 @@ export function createGuestMatch(
               standings: msg.standings,
               winnerId: msg.winnerId,
               reason: msg.reason,
+              championId: msg.championId,
             })
             break
           case 'rematch_waiting':
@@ -429,7 +453,7 @@ export function createGuestMatch(
       onDisconnected: () => {
         if (finished) return
         finished = true
-        events.onResult({ standings: [], winnerId: null, reason: 'host_left' })
+        events.onResult({ standings: [], winnerId: null, reason: 'host_left', championId: null })
       },
       onReconnecting: () => {},
       onError: (err) => events.onError(err.message),

@@ -12,3 +12,7 @@ export function formatTime(ms: number | null): string {
   const s = total % 60
   return `${m}:${s.toString().padStart(2, '0')}`
 }
+
+export function seriesLabel(bestOf: import('../../transport/messages').SeriesFormat): string {
+  return bestOf === null ? 'Infinito' : `Melhor de ${bestOf}`
+}

@@ -119,6 +119,8 @@ function JoinSession({ roomCode }: JoinSessionProps) {
         standings={state.standings}
         myId={state.myId}
         winnerId={state.result.winnerId}
+        championId={state.result.championId}
+        bestOf={setup?.bestOf ?? null}
         reason={state.result.reason}
         localRematchVoted={state.localRematchVoted}
         rematchReadyCount={state.rematchReadyCount}
