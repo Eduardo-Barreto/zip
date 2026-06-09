@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { formatLevelShare } from '../game/progress'
+import { el } from './win-anim'
 
 // Module-top-level, memoized (rerender-no-inline-components, rerender-memo).
 // The reward moment: thundle's staggered win reveal ported onto barreto.sh
@@ -34,10 +35,6 @@ export function Stars({ stars }: { stars: 1 | 2 | 3 }) {
       ))}
     </div>
   )
-}
-
-export function el(delay: number): React.CSSProperties {
-  return { animation: `win-element 420ms cubic-bezier(0.23, 1, 0.32, 1) ${delay}ms both` }
 }
 
 function WinOverlayImpl({ gameNumber, timeMs, stars, score, streak, onNext }: WinOverlayProps) {

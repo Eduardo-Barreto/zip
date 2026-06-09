@@ -4,7 +4,8 @@ import { Board } from '../components/Board'
 import { HintButton } from '../components/HintButton'
 import { ProgressBar } from '../components/ProgressBar'
 import { Timer } from '../components/Timer'
-import { el, Stars } from '../components/WinOverlay'
+import { Stars } from '../components/WinOverlay'
+import { el } from '../components/win-anim'
 import { DIFFICULTY_TIERS, type DifficultyTier, tierByValue } from '../game/difficulty'
 import { generatePuzzleWith } from '../game/generate'
 import { type LevelResult, scoreLevel } from '../game/score'
@@ -78,11 +79,11 @@ function EndlessGame({ tier }: { tier: DifficultyTier }) {
   const [solvedCount, setSolvedCount] = useState(0)
   const [win, setWin] = useState<WinState | null>(null)
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on puzzle, not timer identity
+  // First puzzle only — handleNext restarts the clock for the following ones.
   useEffect(() => {
     timer.reset()
     timer.start()
-  }, [puzzle])
+  }, [timer.reset, timer.start])
 
   const handleHintUsed = useCallback(() => {
     hintsRef.current += 1
@@ -98,10 +99,11 @@ function EndlessGame({ tier }: { tier: DifficultyTier }) {
   }, [timer, tier.value])
 
   const handleNext = useCallback(() => {
+    timer.reset()
+    timer.start()
     startTransition(() => {
       setWin(null)
       hintsRef.current = 0
-      timer.reset()
       setSeed(randomSeed())
     })
   }, [timer])
