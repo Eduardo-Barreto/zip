@@ -5,17 +5,18 @@ import { HintButton } from '../components/HintButton'
 import { ProgressBar } from '../components/ProgressBar'
 import { Timer } from '../components/Timer'
 import { el, Stars } from '../components/WinOverlay'
-import { DEFAULT_TIER, tierByValue } from '../game/difficulty'
+import { DIFFICULTY_TIERS, type DifficultyTier, tierByValue } from '../game/difficulty'
 import { generatePuzzleWith } from '../game/generate'
 import { type LevelResult, scoreLevel } from '../game/score'
 import { useBoardPath } from '../hooks/useBoardPath'
 import { useTimer } from '../hooks/useTimer'
 import { formatTime } from './mp/labels'
 
-// Endless mode, route /endless/:tier. Random puzzles at a FIXED tier difficulty
-// — distinct from the level progression (/play/:n), which climbs the 1→∞ curve
-// and persists. Seeds are page-level randomness (the deterministic core only
-// ever sees the seed); nothing is saved, the solved count is the session's run.
+// Endless mode, routes /endless (ask the difficulty) and /endless/:tier (play).
+// Random puzzles at a FIXED tier difficulty — distinct from the level
+// progression (/play/:n), which climbs the 1→∞ curve and persists. Seeds are
+// page-level randomness (the deterministic core only ever sees the seed);
+// nothing is saved, the solved count is the session's run.
 
 const randomSeed = () => Math.floor(Math.random() * 0x7fffffff)
 
@@ -23,9 +24,50 @@ type WinState = { timeMs: number; stars: LevelResult['stars'] }
 
 export default function Endless() {
   const params = useParams()
-  const navigate = useNavigate()
-  const tier = tierByValue(Number(params.tier)) ?? DEFAULT_TIER
+  const tier = tierByValue(Number(params.tier))
+  return tier === undefined ? <EndlessSetup /> : <EndlessGame tier={tier} />
+}
 
+function EndlessSetup() {
+  const navigate = useNavigate()
+  return (
+    <main className="fade-in mx-auto flex min-h-[100dvh] max-w-md flex-col justify-center gap-8 px-6 py-10">
+      <div className="decorative-grid decorative-grid--masked" aria-hidden="true" />
+      <div className="glow" aria-hidden="true" />
+
+      <div className="text-center">
+        <h1 className="section-heading text-4xl text-[var(--color-accent)]">Modo infinito</h1>
+        <p className="mt-3 text-[15px] text-[var(--color-text-muted)]">
+          Escolha a dificuldade e jogue puzzles sem fim.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-3">
+        {DIFFICULTY_TIERS.map((t) => (
+          <button
+            key={t.value}
+            type="button"
+            onClick={() => navigate(`/endless/${t.value}`)}
+            data-testid={`endless-${t.label.toLowerCase()}`}
+            className="spotlight-card card-lift rounded-xl px-6 py-4 text-center font-[var(--font-mono)] text-[16px] font-bold tracking-tight text-[var(--color-text)] active:scale-95"
+          >
+            {t.label}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          className="px-6 py-2 text-[15px] text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
+        >
+          ← Início
+        </button>
+      </div>
+    </main>
+  )
+}
+
+function EndlessGame({ tier }: { tier: DifficultyTier }) {
+  const navigate = useNavigate()
   const [seed, setSeed] = useState(randomSeed)
   const puzzle = useMemo(() => generatePuzzleWith(seed, tier.value), [seed, tier.value])
 
