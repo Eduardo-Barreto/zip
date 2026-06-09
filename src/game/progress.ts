@@ -130,6 +130,29 @@ export function formatLevelShare(gameNumber: number, result: LevelShare, url?: s
   return lines.join('\n')
 }
 
+/**
+ * The daily challenge result, Wordle-style: the challenge date, time, stars, and
+ * daily streak. No grid, no spoiler.
+ *
+ *   Zip Diário 🟦 2026-06-09
+ *   ⏱ 1:02 · ★★★ · 7 dias🔥
+ *   <url>
+ */
+export function formatDailyShare(
+  dateKey: string,
+  result: { timeMs: number; stars: number },
+  streak: number,
+  url?: string,
+): string {
+  const stars = STARS[Math.max(0, Math.min(3, result.stars))]
+  const lines = [
+    `Zip Diário 🟦 ${dateKey}`,
+    `⏱ ${fmtTime(result.timeMs)} · ${stars} · ${streak} ${streak === 1 ? 'dia' : 'dias'}🔥`,
+  ]
+  if (url) lines.push(url)
+  return lines.join('\n')
+}
+
 // --- guards -------------------------------------------------------------------
 
 function isObject(v: unknown): v is Record<string, unknown> {

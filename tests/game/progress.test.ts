@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   CURRENT_VERSION,
+  formatDailyShare,
   formatLevelShare,
   freshProgress,
   load,
@@ -70,6 +71,24 @@ describe('migration with a real legacy fixture (AC17)', () => {
     // Defensive: an out-of-range star count must not throw or render a grid.
     expect(formatLevelShare(1, { timeMs: 1000, stars: 5, streak: 1 })).toContain('★★★')
     expect(formatLevelShare(1, { timeMs: 1000, stars: 0, streak: 1 })).toContain('#001')
+  })
+
+  it('formats a daily share with the date, time, stars, and daily streak', () => {
+    const text = formatDailyShare(
+      '2026-06-09',
+      { timeMs: 62_000, stars: 3 },
+      7,
+      'https://zip.example',
+    )
+    expect(text).toContain('Zip Diário 🟦 2026-06-09')
+    expect(text).toContain('1:02')
+    expect(text).toContain('★★★')
+    expect(text).toContain('7 dias🔥')
+    expect(text.endsWith('https://zip.example')).toBe(true)
+  })
+
+  it('uses the singular "dia" for a 1-day daily streak', () => {
+    expect(formatDailyShare('2026-06-09', { timeMs: 1000, stars: 1 }, 1)).toContain('1 dia🔥')
   })
 })
 

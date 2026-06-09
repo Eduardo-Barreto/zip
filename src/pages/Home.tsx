@@ -87,6 +87,13 @@ export default function Home() {
           </Link>
         ) : null}
         <Link
+          to="/daily"
+          data-testid="daily"
+          className="spotlight-card card-lift rounded-xl px-6 py-3 text-center text-[15px] text-[var(--color-text)]"
+        >
+          Desafio diário
+        </Link>
+        <Link
           to="/levels"
           className="spotlight-card card-lift rounded-xl px-6 py-3 text-center text-[15px] text-[var(--color-text)]"
         >
