@@ -15,6 +15,7 @@ export type PathState = { path: Cell[] }
 export type PathAction =
   | { type: 'start'; cell: Cell }
   | { type: 'extendTo'; cell: Cell }
+  | { type: 'truncateTo'; cell: Cell }
   | { type: 'reset' }
 
 /** The cell that carries checkpoint order 1 — the only legal place to begin. */
@@ -68,6 +69,13 @@ export function pathReducer(puzzle: Puzzle, state: PathState, action: PathAction
 
       return { path: [...path, action.cell] }
     }
+    case 'truncateTo': {
+      // Discrete tap/click on a cell already in the trail: jump-truncate the
+      // path back to it. Dispatched ONLY on tap (pointer-down), never during a
+      // drag, so brushing an earlier cell while drawing can't collapse the path.
+      const idx = state.path.indexOf(action.cell)
+      return idx === -1 ? state : { path: state.path.slice(0, idx + 1) }
+    }
     case 'reset':
       return { path: [] }
     default:
@@ -82,6 +90,8 @@ export type UsePathDrawing = {
   validation: ValidateResult
   start: (cell: Cell) => void
   extendTo: (cell: Cell) => void
+  /** Discrete tap on a visited cell: truncate the trail back to it. */
+  truncateTo: (cell: Cell) => void
   reset: () => void
   /** Transient pointer cell under the finger; read imperatively, never rendered. */
   pointerRef: React.RefObject<Cell | null>
@@ -99,6 +109,7 @@ export function usePathDrawing(puzzle: Puzzle): UsePathDrawing {
 
   const start = useCallback((cell: Cell) => dispatch({ type: 'start', cell }), [])
   const extendTo = useCallback((cell: Cell) => dispatch({ type: 'extendTo', cell }), [])
+  const truncateTo = useCallback((cell: Cell) => dispatch({ type: 'truncateTo', cell }), [])
   const reset = useCallback(() => dispatch({ type: 'reset' }), [])
 
   // Derived state computed in render — no effect, no extra setState.
@@ -111,6 +122,7 @@ export function usePathDrawing(puzzle: Puzzle): UsePathDrawing {
     validation,
     start,
     extendTo,
+    truncateTo,
     reset,
     pointerRef,
   }

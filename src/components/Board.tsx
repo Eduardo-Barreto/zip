@@ -40,7 +40,7 @@ function cellFromPoint(boardEl: HTMLElement, x: number, y: number): CellIndex | 
 
 export function Board({ puzzle, onSolved }: BoardProps) {
   const { rows, cols } = puzzle
-  const { path, isComplete, validation, start, extendTo, reset, pointerRef } =
+  const { path, isComplete, validation, start, extendTo, truncateTo, reset, pointerRef } =
     usePathDrawing(puzzle)
 
   const boardRef = useRef<HTMLDivElement>(null)
@@ -79,11 +79,14 @@ export function Board({ puzzle, onSolved }: BoardProps) {
     const cell = cellFromPoint(board, e.clientX, e.clientY)
     if (cell === undefined) return
     pointerRef.current = cell
-    // Begin from the order-1 cell, or resume if grabbing the current head.
+    // A tap on an earlier cell of the trail truncates back to it; truncation is
+    // tap-only (see pathReducer 'truncateTo'), so a drag never triggers it.
     if (path.length === 0) {
       start(cell)
     } else if (cell === path.at(-1)) {
       // resume drag from head — no state change
+    } else if (onPath.has(cell)) {
+      truncateTo(cell)
     } else {
       extendTo(cell)
     }
