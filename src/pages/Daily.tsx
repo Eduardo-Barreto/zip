@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Board } from '../components/Board'
 import {
@@ -58,12 +58,11 @@ export default function Daily() {
   const result = daily.results[todayKey]
 
   const timer = useTimer()
-  // biome-ignore lint/correctness/useExhaustiveDependencies: start once for the day
   useEffect(() => {
     if (done) return
     timer.reset()
     timer.start()
-  }, [done])
+  }, [done, timer.reset, timer.start])
 
   const handleSolved = useCallback(() => {
     const timeMs = timer.stop()
@@ -114,15 +113,18 @@ function DailyDone({
 }) {
   const [shared, setShared] = useState(false)
   const [remaining, setRemaining] = useState(() => msUntilNextUtcDay(new Date()))
-  const sharedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     const id = setInterval(() => setRemaining(msUntilNextUtcDay(new Date())), 1000)
-    return () => {
-      clearInterval(id)
-      if (sharedTimer.current !== null) clearTimeout(sharedTimer.current)
-    }
+    return () => clearInterval(id)
   }, [])
+
+  // The effect owns the 2s "Copiado ✓" reset, so it is cleared on unmount too.
+  useEffect(() => {
+    if (!shared) return
+    const id = setTimeout(() => setShared(false), 2000)
+    return () => clearTimeout(id)
+  }, [shared])
 
   const handleShare = useCallback(async () => {
     const url = typeof window !== 'undefined' ? window.location.origin : undefined
@@ -130,8 +132,6 @@ function DailyDone({
     try {
       await navigator.clipboard.writeText(text)
       setShared(true)
-      if (sharedTimer.current !== null) clearTimeout(sharedTimer.current)
-      sharedTimer.current = setTimeout(() => setShared(false), 2000)
     } catch {
       window.prompt('Copie seu resultado:', text)
     }
