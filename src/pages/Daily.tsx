@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Board } from '../components/Board'
 import {
@@ -114,10 +114,14 @@ function DailyDone({
 }) {
   const [shared, setShared] = useState(false)
   const [remaining, setRemaining] = useState(() => msUntilNextUtcDay(new Date()))
+  const sharedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     const id = setInterval(() => setRemaining(msUntilNextUtcDay(new Date())), 1000)
-    return () => clearInterval(id)
+    return () => {
+      clearInterval(id)
+      if (sharedTimer.current !== null) clearTimeout(sharedTimer.current)
+    }
   }, [])
 
   const handleShare = useCallback(async () => {
@@ -126,7 +130,8 @@ function DailyDone({
     try {
       await navigator.clipboard.writeText(text)
       setShared(true)
-      setTimeout(() => setShared(false), 2000)
+      if (sharedTimer.current !== null) clearTimeout(sharedTimer.current)
+      sharedTimer.current = setTimeout(() => setShared(false), 2000)
     } catch {
       window.prompt('Copie seu resultado:', text)
     }
