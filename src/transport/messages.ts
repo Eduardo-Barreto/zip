@@ -27,6 +27,9 @@ export type Standing = {
 
 export type ResultReason = 'solved' | 'host_left'
 
+/** Series format: best-of-N rounds, or null for an endless rematch loop. */
+export type SeriesFormat = 3 | 5 | 7 | null
+
 export type GuestToHost =
   | { t: 'hello' }
   | { t: 'ready'; ready: boolean }
@@ -37,7 +40,13 @@ export type GuestToHost =
 export type HostToGuest =
   | { t: 'welcome'; you: string }
   | { t: 'lobby'; players: LobbyPlayer[] }
-  | { t: 'match_setup'; seed: number; difficulty: number }
+  | { t: 'match_setup'; seed: number; difficulty: number; bestOf: SeriesFormat }
   | { t: 'standings'; players: Standing[] }
-  | { t: 'result'; standings: Standing[]; winnerId: string | null; reason: ResultReason }
+  | {
+      t: 'result'
+      standings: Standing[]
+      winnerId: string | null
+      reason: ResultReason
+      championId: string | null
+    }
   | { t: 'rematch_waiting'; readyCount: number; total: number }

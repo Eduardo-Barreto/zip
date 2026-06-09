@@ -1,4 +1,11 @@
-import type { GuestToHost, HostToGuest, LobbyPlayer, ResultReason, Standing } from './messages'
+import type {
+  GuestToHost,
+  HostToGuest,
+  LobbyPlayer,
+  ResultReason,
+  SeriesFormat,
+  Standing,
+} from './messages'
 
 function isObject(v: unknown): v is Record<string, unknown> {
   if (typeof v !== 'object' || v === null || Array.isArray(v)) return false
@@ -14,6 +21,10 @@ function isFiniteNumber(v: unknown): v is number {
 
 function isReason(v: unknown): v is ResultReason {
   return v === 'solved' || v === 'host_left'
+}
+
+function isSeriesFormat(v: unknown): v is SeriesFormat {
+  return v === null || v === 3 || v === 5 || v === 7
 }
 
 function validateLobbyPlayer(v: unknown): LobbyPlayer | null {
@@ -106,7 +117,8 @@ export function validateHostToGuest(raw: unknown): HostToGuest | null {
     case 'match_setup': {
       if (!isFiniteNumber(raw.seed) || !isFiniteNumber(raw.difficulty)) return null
       if (raw.difficulty < 1) return null
-      return { t: 'match_setup', seed: raw.seed, difficulty: raw.difficulty }
+      if (!isSeriesFormat(raw.bestOf)) return null
+      return { t: 'match_setup', seed: raw.seed, difficulty: raw.difficulty, bestOf: raw.bestOf }
     }
     case 'standings': {
       const players = validateArray(raw.players, validateStanding)
@@ -118,11 +130,13 @@ export function validateHostToGuest(raw: unknown): HostToGuest | null {
       if (standings === null) return null
       if (!isReason(raw.reason)) return null
       if (raw.winnerId !== null && typeof raw.winnerId !== 'string') return null
+      if (raw.championId !== null && typeof raw.championId !== 'string') return null
       return {
         t: 'result',
         standings,
         winnerId: raw.winnerId === null ? null : raw.winnerId,
         reason: raw.reason,
+        championId: raw.championId === null ? null : raw.championId,
       }
     }
     case 'rematch_waiting': {

@@ -19,7 +19,7 @@
     "typecheck": "tsc -b --noEmit",
     "guard:determinism": "node scripts/check-determinism.mjs",
     "doctor": "npx react-doctor@latest --verbose",
-    "verify": "bun run typecheck && bun run lint && bun run guard:determinism && bun run test:run && bun run doctor",
+    "verify": "bun run typecheck && bun run lint && bun run guard:determinism && bun run test:run && bun run test:e2e && bun run doctor",
     "prepare": "lefthook install"
   },
   "dependencies": {

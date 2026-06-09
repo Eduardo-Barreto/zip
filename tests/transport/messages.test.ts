@@ -25,8 +25,8 @@ const VALID_HOST_TO_GUEST: HostToGuest[] = [
       { id: 'g1', seat: 2, ready: false },
     ],
   },
-  { t: 'match_setup', seed: 123456, difficulty: 1 },
-  { t: 'match_setup', seed: 0, difficulty: 60 },
+  { t: 'match_setup', seed: 123456, difficulty: 1, bestOf: 3 },
+  { t: 'match_setup', seed: 0, difficulty: 60, bestOf: null },
   {
     t: 'standings',
     players: [
@@ -41,8 +41,9 @@ const VALID_HOST_TO_GUEST: HostToGuest[] = [
     ],
     winnerId: 'host',
     reason: 'solved',
+    championId: 'host',
   },
-  { t: 'result', standings: [], winnerId: null, reason: 'host_left' },
+  { t: 'result', standings: [], winnerId: null, reason: 'host_left', championId: null },
   { t: 'rematch_waiting', readyCount: 1, total: 3 },
 ]
 
@@ -109,6 +110,8 @@ describe('AC19: hostile payloads rejected (return null)', () => {
     ['match_setup: difficulty zero (< 1)', { t: 'match_setup', seed: 1, difficulty: 0 }],
     ['match_setup: difficulty negative', { t: 'match_setup', seed: 1, difficulty: -5 }],
     ['match_setup: seed NaN', { t: 'match_setup', seed: Number.NaN, difficulty: 1 }],
+    ['match_setup: missing bestOf', { t: 'match_setup', seed: 1, difficulty: 1 }],
+    ['match_setup: bestOf out of set', { t: 'match_setup', seed: 1, difficulty: 1, bestOf: 4 }],
     // welcome
     ['welcome: missing you', { t: 'welcome' }],
     ['welcome: you wrong type', { t: 'welcome', you: 42 }],
@@ -138,6 +141,10 @@ describe('AC19: hostile payloads rejected (return null)', () => {
     ],
     ['result: bad reason', { t: 'result', standings: [], winnerId: null, reason: 'kicked' }],
     ['result: winnerId wrong type', { t: 'result', standings: [], winnerId: 5, reason: 'solved' }],
+    [
+      'result: championId wrong type',
+      { t: 'result', standings: [], winnerId: null, reason: 'solved', championId: 7 },
+    ],
     [
       'result: bad standing timeMs',
       {
