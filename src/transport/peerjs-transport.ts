@@ -16,6 +16,12 @@ const HOST_ID_RETRY_MAX = 3
 const BROKER_RECONNECT_MAX = 3
 const LAN_IP_REGEX = /^(?:\d+\.){3}\d+$/
 
+// A custom broker must speak the page's scheme: an https page can't open ws://
+// (mixed content), and the dev:lan broker (`peerjs --port 9000`) is plain ws —
+// deriving `secure` from the host name dialed wss:// at a TLS-less server and
+// never connected.
+const pageIsHttps = () => typeof window !== 'undefined' && window.location.protocol === 'https:'
+
 const peerOptions = () => {
   const envHost = import.meta.env?.VITE_PEER_HOST as string | undefined
   const envPort = import.meta.env?.VITE_PEER_PORT as string | undefined
@@ -29,7 +35,7 @@ const peerOptions = () => {
         host: hostname,
         port: 9000,
         path: '/pj',
-        secure: false,
+        secure: pageIsHttps(),
         debug: 1,
       }
     }
@@ -39,7 +45,7 @@ const peerOptions = () => {
     host: envHost,
     port: envPort ? Number.parseInt(envPort, 10) : 443,
     path: envPath ?? '/',
-    secure: envHost !== 'localhost' && envHost !== '127.0.0.1',
+    secure: pageIsHttps(),
     debug: 1,
   }
 }
@@ -88,7 +94,13 @@ function createHostWithRetry(
   attempt: number,
 ): Promise<PeerHost> {
   return new Promise((resolve, reject) => {
-    const peer = new Peer(desiredId, peerOptions())
+    let peer: Peer
+    try {
+      peer = new Peer(desiredId, peerOptions())
+    } catch (err) {
+      reject(asUserFacingError(err))
+      return
+    }
     const connections = new Map<string, DataConnection>()
     let opened = false
     let closed = false
@@ -175,7 +187,13 @@ async function createClient(
   handlers: ClientHandlers,
 ): Promise<PeerClient> {
   return new Promise((resolve, reject) => {
-    const peer = new Peer(desiredId, peerOptions())
+    let peer: Peer
+    try {
+      peer = new Peer(desiredId, peerOptions())
+    } catch (err) {
+      reject(asUserFacingError(err))
+      return
+    }
     let conn: DataConnection | null = null
     let attempt = 0
     let closed = false
