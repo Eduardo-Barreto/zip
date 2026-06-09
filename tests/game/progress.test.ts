@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   CURRENT_VERSION,
-  formatShare,
+  formatLevelShare,
   freshProgress,
   load,
   recordCompletion,
@@ -44,17 +44,32 @@ describe('migration with a real legacy fixture (AC17)', () => {
     expect(migrated.streak).toBe(4)
   })
 
-  it('formats a shareable score summary with per-level best times', () => {
-    let p = freshProgress()
-    p = recordCompletion(p, 1, { stars: 3, timeMs: 4200, hintsUsed: 0 })
-    p = recordCompletion(p, 2, { stars: 2, timeMs: 65_000, hintsUsed: 1 })
-    const text = formatShare(p)
-    expect(text).toContain('Zip')
-    expect(text).toContain('#001')
-    expect(text).toContain('0:04') // 4200ms
-    expect(text).toContain('#002')
-    expect(text).toContain('1:05') // 65000ms
+  it('formats a per-level share (Wordle-style): level, time, stars, streak', () => {
+    const text = formatLevelShare(14, { timeMs: 62_000, stars: 3, streak: 7 })
+    expect(text).toContain('Zip 🟦 #014')
+    expect(text).toContain('1:02') // 62000ms
     expect(text).toContain('★★★')
+    expect(text).toContain('sequência 7🔥')
+  })
+
+  it('appends the game URL only when one is given', () => {
+    const withUrl = formatLevelShare(
+      3,
+      { timeMs: 4200, stars: 2, streak: 1 },
+      'https://zip.example',
+    )
+    expect(withUrl.endsWith('https://zip.example')).toBe(true)
+    expect(withUrl.split('\n')).toHaveLength(3)
+
+    const withoutUrl = formatLevelShare(3, { timeMs: 4200, stars: 2, streak: 1 })
+    expect(withoutUrl.split('\n')).toHaveLength(2)
+    expect(withoutUrl).not.toContain('http')
+  })
+
+  it('clamps the star glyphs to the 0..3 range without leaking the solution', () => {
+    // Defensive: an out-of-range star count must not throw or render a grid.
+    expect(formatLevelShare(1, { timeMs: 1000, stars: 5, streak: 1 })).toContain('★★★')
+    expect(formatLevelShare(1, { timeMs: 1000, stars: 0, streak: 1 })).toContain('#001')
   })
 })
 
