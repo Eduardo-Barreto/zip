@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   CLAMP_THRESHOLD,
+  DEFAULT_TIER,
+  DIFFICULTY_TIERS,
   difficultyScore,
   MAX_GRID_AREA,
   MIN_CHECKPOINT_FLOOR,
@@ -47,6 +49,36 @@ describe('difficultyScore monotonicity (AC5)', () => {
     if (a.rows === b.rows && a.wallDensity === b.wallDensity && a.checkpoints === b.checkpoints) {
       expect(difficultyScore(900)).toBe(difficultyScore(950))
     }
+  })
+})
+
+describe('difficulty tiers (single-player + online, Médio default)', () => {
+  it('exposes exactly three tiers and no retired "Extremo"', () => {
+    expect(DIFFICULTY_TIERS).toHaveLength(3)
+    const labels = DIFFICULTY_TIERS.map((t) => t.label)
+    expect(labels).toEqual(['Fácil', 'Médio', 'Difícil'])
+    expect(labels).not.toContain('Extremo')
+  })
+
+  it('pre-selects Médio as the default tier', () => {
+    expect(DEFAULT_TIER.label).toBe('Médio')
+    expect(DIFFICULTY_TIERS).toContainEqual(DEFAULT_TIER)
+  })
+
+  it('maps the three tiers to perceptibly distinct, increasing boards', () => {
+    const easy = paramsFor(DIFFICULTY_TIERS[0].value)
+    const medium = paramsFor(DIFFICULTY_TIERS[1].value)
+    const hard = paramsFor(DIFFICULTY_TIERS[2].value)
+    const area = (p: { rows: number; cols: number }) => p.rows * p.cols
+    expect(area(easy)).toBeLessThan(area(medium))
+    expect(area(medium)).toBeLessThan(area(hard))
+    expect(easy.wallDensity).toBeLessThan(hard.wallDensity)
+    expect(difficultyScore(DIFFICULTY_TIERS[0].value)).toBeLessThan(
+      difficultyScore(DIFFICULTY_TIERS[1].value),
+    )
+    expect(difficultyScore(DIFFICULTY_TIERS[1].value)).toBeLessThan(
+      difficultyScore(DIFFICULTY_TIERS[2].value),
+    )
   })
 })
 

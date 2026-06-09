@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { JoinLinkBox } from '../../components/JoinLinkBox'
 import { PlayerList } from '../../components/PlayerList'
+import { DEFAULT_TIER, DIFFICULTY_TIERS, type DifficultyTier } from '../../game/difficulty'
 import { generatePuzzleWith } from '../../game/generate'
 import { randomMatchSeed } from '../../hooks/matchController'
 import { useMatch } from '../../hooks/useMatch'
@@ -13,21 +14,8 @@ import { ResultView } from './Result'
 // Host page: pick a difficulty, then open a room and share it. Guests join into
 // a lobby and mark themselves Pronto; the host starts everyone at once. The peer
 // room stays open across rematches. The host is seat 1 and counts as a player.
-
-// ---------------------------------------------------------------------------
-// Difficulty tiers
-// ---------------------------------------------------------------------------
-
-type DifficultyTier = { label: string; value: number }
-
-const DIFFICULTY_TIERS: DifficultyTier[] = [
-  { label: 'Fácil', value: 3 },
-  { label: 'Médio', value: 12 },
-  { label: 'Difícil', value: 30 },
-  { label: 'Extremo', value: 60 },
-]
-
-const DEFAULT_DIFFICULTY: DifficultyTier = { label: 'Médio', value: 12 }
+// Difficulty tiers (Fácil/Médio/Difícil, Médio default) are shared with the
+// single-player start screen — see game/difficulty.ts.
 
 // ---------------------------------------------------------------------------
 // Root component — shows the difficulty picker, then mounts the room
@@ -50,7 +38,7 @@ type DifficultyPickerProps = { onConfirm: (tier: DifficultyTier) => void }
 
 function DifficultyPicker({ onConfirm }: DifficultyPickerProps) {
   const navigate = useNavigate()
-  const [selected, setSelected] = useState<DifficultyTier>(DEFAULT_DIFFICULTY)
+  const [selected, setSelected] = useState<DifficultyTier>(DEFAULT_TIER)
 
   return (
     <main className="fade-in mx-auto flex min-h-[100dvh] max-w-md flex-col justify-center gap-8 px-6 py-10">
@@ -68,7 +56,7 @@ function DifficultyPicker({ onConfirm }: DifficultyPickerProps) {
         <p className="font-[var(--font-mono)] text-[12px] uppercase tracking-widest text-[var(--color-text-dim)]">
           Dificuldade
         </p>
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           {DIFFICULTY_TIERS.map((tier) => (
             <DifficultyButton
               key={tier.value}
