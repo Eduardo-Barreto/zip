@@ -23,11 +23,7 @@ export default function Home() {
       <div className="flex flex-col gap-3">
         <Link
           to={`/play/${currentGame}`}
-          className="card-lift rounded-xl px-6 py-4 text-center font-[var(--font-mono)] text-[16px] font-bold tracking-tight text-[#0a0a0a] active:scale-95"
-          style={{
-            backgroundColor: 'var(--color-accent)',
-            boxShadow: '0 12px 36px -12px color-mix(in srgb, var(--color-accent) 70%, transparent)',
-          }}
+          className="btn-accent card-lift rounded-xl px-6 py-4 text-center font-[var(--font-mono)] text-[16px] font-bold tracking-tight active:scale-95"
         >
           Continuar — nível {currentGame}
         </Link>

@@ -145,6 +145,13 @@
       0 0 0 1px color-mix(in srgb, var(--color-accent) 18%, transparent),
       0 12px 40px -16px color-mix(in srgb, var(--color-accent) 40%, transparent);
   }
+
+  /* Primary call-to-action: solid accent fill with a soft accent glow. */
+  .btn-accent {
+    background-color: var(--color-accent);
+    color: #0a0a0a;
+    box-shadow: 0 12px 36px -12px color-mix(in srgb, var(--color-accent) 70%, transparent);
+  }
 }
 
 @layer utilities {

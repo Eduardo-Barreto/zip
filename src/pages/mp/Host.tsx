@@ -84,11 +84,7 @@ function DifficultyPicker({ onConfirm }: DifficultyPickerProps) {
         type="button"
         onClick={() => onConfirm(selected)}
         data-testid="create-room"
-        className="card-lift rounded-xl px-6 py-4 text-center font-[var(--font-mono)] text-[16px] font-bold tracking-tight text-[#0a0a0a] active:scale-95"
-        style={{
-          backgroundColor: 'var(--color-accent)',
-          boxShadow: '0 12px 36px -12px color-mix(in srgb, var(--color-accent) 70%, transparent)',
-        }}
+        className="btn-accent card-lift rounded-xl px-6 py-4 text-center font-[var(--font-mono)] text-[16px] font-bold tracking-tight active:scale-95"
       >
         Criar sala — {selected.label}
       </button>
@@ -225,11 +221,7 @@ function HostSession({ roomCode, transport, difficulty, seed }: HostSessionProps
           onClick={start}
           disabled={!canStart}
           data-testid="start-match"
-          className="card-lift rounded-xl px-6 py-4 text-center font-[var(--font-mono)] text-[16px] font-bold tracking-tight text-[#0a0a0a] active:scale-95 disabled:opacity-40"
-          style={{
-            backgroundColor: 'var(--color-accent)',
-            boxShadow: '0 12px 36px -12px color-mix(in srgb, var(--color-accent) 70%, transparent)',
-          }}
+          className="btn-accent card-lift rounded-xl px-6 py-4 text-center font-[var(--font-mono)] text-[16px] font-bold tracking-tight active:scale-95 disabled:opacity-40"
         >
           {canStart ? 'Iniciar partida' : 'Aguardando jogadores…'}
         </button>

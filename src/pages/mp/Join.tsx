@@ -72,11 +72,7 @@ function JoinForm({ initial, onConfirm }: JoinFormProps) {
           onClick={submit}
           disabled={!valid}
           data-testid="join-confirm"
-          className="card-lift rounded-xl px-6 py-4 text-center font-[var(--font-mono)] text-[16px] font-bold tracking-tight text-[#0a0a0a] active:scale-95 disabled:opacity-40"
-          style={{
-            backgroundColor: 'var(--color-accent)',
-            boxShadow: '0 12px 36px -12px color-mix(in srgb, var(--color-accent) 70%, transparent)',
-          }}
+          className="btn-accent card-lift rounded-xl px-6 py-4 text-center font-[var(--font-mono)] text-[16px] font-bold tracking-tight active:scale-95 disabled:opacity-40"
         >
           Entrar
         </button>
