@@ -127,7 +127,12 @@ function DailyDone({
   }, [shared])
 
   const handleShare = useCallback(async () => {
-    const url = typeof window !== 'undefined' ? window.location.origin : undefined
+    // origin alone 404s on a project Pages site — include the deploy base path
+    // (BASE_URL is '/zip/' there, '/' in dev) and the hash route, like JoinLinkBox.
+    const url =
+      typeof window !== 'undefined'
+        ? `${window.location.origin}${import.meta.env.BASE_URL}#/daily`
+        : undefined
     const text = formatDailyShare(dateKey, result, streak, url)
     try {
       await navigator.clipboard.writeText(text)

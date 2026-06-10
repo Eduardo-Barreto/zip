@@ -47,8 +47,12 @@ function WinOverlayImpl({ gameNumber, timeMs, stars, score, streak, onNext }: Wi
   }, [shared])
   const handleShare = useCallback(async () => {
     // Falls back to a prompt when the clipboard is unavailable (insecure
-    // context / denied permission).
-    const url = typeof window !== 'undefined' ? window.location.origin : undefined
+    // context / denied permission). origin alone 404s on a project Pages site —
+    // include the deploy base path ('/zip/' there, '/' in dev).
+    const url =
+      typeof window !== 'undefined'
+        ? `${window.location.origin}${import.meta.env.BASE_URL}`
+        : undefined
     const text = formatLevelShare(gameNumber, { timeMs, stars, streak }, url)
     try {
       await navigator.clipboard.writeText(text)
